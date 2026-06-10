@@ -13,8 +13,8 @@
         body, html {
             margin: 0;
             padding: 0;
-            width: 1080px;
-            height: 1920px;
+            width: 100vw;
+            height: 100vh;
             background-color: var(--black);
             color: var(--white);
             font-family: 'Playfair Display', serif;
@@ -35,15 +35,15 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url('https://poke.com/media/5fb0cc73-8d4f-5749-bfab-70c1be3936bf');
-            background-size: 300%;
-            background-position: center 20%;
+            background-image: url('https://storage.googleapis.com/interaction-media-bucket/47f84109-d17a-4375-8fc8-f55e778ed5d8/5fb0cc73-8d4f-5749-bfab-70c1be3936bf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=vercel%40theta-eon-430220-u6.iam.gserviceaccount.com%2F20260610%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260610T141316Z&X-Goog-Expires=60&X-Goog-SignedHeaders=host&X-Goog-Signature=29cea9cea183f16f8ca1bc55831f7afd5293deacf810d0774e9b1770913f049a4b03d96ea9f4bab1e8299180cc2e263884bba23157f969d978eab33554edbaa6c7895d54aba653936c7582b881987620ce69d3d7bf4f0b2351dd1b1cbfa260491f76201a97eaaf529cad66faf6f614ca4534980f9460dd2a72f22262788393fcf30c09d2c455f17c66403008924b0859ce25c9c17952725506d7112d87d674433a1cf7c55e101995c2af6caa80fe1a05f7515bda2a4494024b535b4a464c8d7f47cf2ffb4cd5365322e116a5d30211658d69681783d7da13e7ec4f4aa4d72f1c6ae5866a3b583b2dc2744bd432c4dfcfb490e75d0601cec6266da071b694252c');
+            background-size: cover;
+            background-position: center;
             filter: contrast(1.1) brightness(0.9);
-            animation: panMacro 10s ease-in-out forwards;
+            animation: panMacro 10s ease-in-out infinite alternate;
         }
         @keyframes panMacro {
-            0% { background-position: 45% 20%; background-size: 350%; }
-            100% { background-position: 55% 25%; background-size: 300%; }
+            0% { transform: scale(3.5) translate(5%, 5%); }
+            100% { transform: scale(3) translate(-5%, -5%); }
         }
         .overlay {
             position: absolute;
@@ -54,7 +54,7 @@
             z-index: 10;
         }
         .hook {
-            font-size: 48px;
+            font-size: clamp(24px, 5vw, 48px);
             font-weight: 300;
             letter-spacing: 2px;
             line-height: 1.4;
@@ -63,7 +63,7 @@
             text-shadow: 2px 2px 10px rgba(0,0,0,0.8);
         }
         .sub-hook {
-            font-size: 24px;
+            font-size: clamp(14px, 3vw, 24px);
             color: var(--gold);
             text-transform: uppercase;
             letter-spacing: 8px;
@@ -74,7 +74,7 @@
         .logo {
             position: absolute;
             top: 10%;
-            font-size: 32px;
+            font-size: clamp(20px, 4vw, 32px);
             letter-spacing: 12px;
             font-weight: 700;
             color: var(--gold);
