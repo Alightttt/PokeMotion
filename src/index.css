@@ -2,8 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  overflow: hidden;
-  background-color: #111;
+@layer base {
+  body {
+    @apply bg-black text-brutal-white font-mono;
+    margin: 0;
+    overflow: hidden;
+  }
+}
+
+.brutal-border {
+  border: 1px solid #f2f2f2;
+}
+
+.brutal-bg {
+  background-color: #000;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #000;
+}
+::-webkit-scrollbar-thumb {
+  background: #e63946;
 }
