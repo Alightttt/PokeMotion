@@ -32,7 +32,118 @@ const ANIMATION_PRESETS = {
 // --- Main App Component ---
 export default function App() {
   // State
-  const [layers, setLayers] = useState([]);
+  const [layers, setLayers] = useState([
+    {
+      id: 'dm-to-order',
+      type: 'text',
+      name: 'DM TO ORDER',
+      start: 9,
+      duration: 1,
+      visible: true,
+      locked: false,
+      props: {
+        x: 1920 / 2,
+        y: 1080 - 150,
+        scale: 1,
+        opacity: 1,
+        rotation: 0,
+        text: 'DM TO ORDER',
+        fontSize: 80,
+        fontFamily: 'JetBrains Mono',
+        color: CLAW_RED,
+        textAlign: 'center',
+        animation: 'SNAP_SPRING'
+      }
+    },
+    {
+      id: 'realism',
+      type: 'text',
+      name: 'REALISM.',
+      start: 6.5,
+      duration: 2.5,
+      visible: true,
+      locked: false,
+      props: {
+        x: 1920 / 2,
+        y: 1080 / 2,
+        scale: 1,
+        opacity: 1,
+        rotation: 0,
+        text: 'REALISM.',
+        fontSize: 160,
+        fontFamily: 'JetBrains Mono',
+        color: BRUTAL_WHITE,
+        textAlign: 'center',
+        animation: 'KINETIC_DRIFT'
+      }
+    },
+    {
+      id: 'par-maine',
+      type: 'text',
+      name: 'par maine isse...',
+      start: 5,
+      duration: 1.5,
+      visible: true,
+      locked: false,
+      props: {
+        x: 1920 / 2,
+        y: 1080 / 2,
+        scale: 1,
+        opacity: 1,
+        rotation: 0,
+        text: 'par maine isse...',
+        fontSize: 100,
+        fontFamily: 'Playfair Display',
+        color: BRUTAL_WHITE,
+        textAlign: 'center',
+        animation: 'SUBPIXEL_SLIDE'
+      }
+    },
+    {
+      id: 'toot-gayi',
+      type: 'text',
+      name: 'TOOT GAYI.',
+      start: 3,
+      duration: 2,
+      visible: true,
+      locked: false,
+      props: {
+        x: 1920 / 2,
+        y: 1080 / 2,
+        scale: 1,
+        opacity: 1,
+        rotation: 0,
+        text: 'TOOT GAYI.',
+        fontSize: 140,
+        fontFamily: 'JetBrains Mono',
+        color: CLAW_RED,
+        textAlign: 'center',
+        animation: 'GLITCH_FLICKER'
+      }
+    },
+    {
+      id: 'trash-tools',
+      type: 'text',
+      name: 'TRASH TOOLS',
+      start: 0,
+      duration: 3,
+      visible: true,
+      locked: false,
+      props: {
+        x: 1920 / 2,
+        y: 1080 / 2,
+        scale: 1,
+        opacity: 1,
+        rotation: 0,
+        text: 'TRASH TOOLS',
+        fontSize: 180,
+        fontFamily: 'JetBrains Mono',
+        color: BRUTAL_WHITE,
+        textAlign: 'center',
+        animation: 'SNAP_SPRING'
+      }
+    }
+  ]);
   const [selectedLayerId, setSelectedLayerId] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(10); // seconds
@@ -115,7 +226,6 @@ export default function App() {
         const assetId = Math.random().toString(36).substr(2, 9);
         assetsRef.current[assetId] = img;
         addLayer('image');
-        // Update the last added layer (we know it's at index 0 because of our addLayer logic)
         setLayers(prev => {
           const newLayers = [...prev];
           newLayers[0].props.assetId = assetId;
@@ -161,6 +271,8 @@ export default function App() {
         animX = Math.sin(progress * Math.PI) * 50;
       } else if (layer.props.animation === ANIMATION_PRESETS.GLITCH_FLICKER) {
         animAlpha = Math.random() > 0.9 ? 0 : 1;
+      } else if (layer.props.animation === ANIMATION_PRESETS.SUBPIXEL_SLIDE) {
+        animY = gsap.utils.interpolate(20, 0, progress);
       }
 
       ctx.scale(animScale, animScale);
@@ -187,7 +299,7 @@ export default function App() {
       ctx.restore();
     });
 
-    // Brutalist Overlay: Grid Scanlines
+    // Brutalist Overlay
     ctx.save();
     ctx.strokeStyle = 'rgba(242, 242, 242, 0.05)';
     ctx.lineWidth = 1;
@@ -230,13 +342,10 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
-    // Handle 2x DPR
     const dpr = window.devicePixelRatio || 1;
     canvas.width = resolution.width * dpr;
     canvas.height = resolution.height * dpr;
     ctx.scale(dpr, dpr);
-    
     drawFrame(ctx, currentTime);
   }, [currentTime, resolution, drawFrame]);
 
@@ -245,14 +354,12 @@ export default function App() {
     setIsExporting(true);
     setExportProgress(0);
     setIsPlaying(false);
-    
     const canvas = canvasRef.current;
     const stream = canvas.captureStream(fps);
     const recorder = new MediaRecorder(stream, {
       mimeType: 'video/webm;codecs=vp9',
       bitsPerSecond: 5000000
     });
-
     const chunks = [];
     recorder.ondataavailable = (e) => chunks.push(e.data);
     recorder.onstop = () => {
@@ -260,22 +367,17 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `pokemotion-${Date.now()}.webm`;
+      a.download = `skechzz-broken-pencil-${Date.now()}.webm`;
       a.click();
       setIsExporting(false);
     };
-
     recorder.start();
-
-    // Frame by frame recording simulation
     let exportTime = 0;
     const step = 1 / fps;
-    
     const exportInterval = setInterval(() => {
       exportTime += step;
       setCurrentTime(exportTime);
       setExportProgress((exportTime / duration) * 100);
-      
       if (exportTime >= duration) {
         clearInterval(exportInterval);
         recorder.stop();
@@ -287,13 +389,11 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-brutal-black text-brutal-white font-mono overflow-hidden">
-      {/* --- Top Bar --- */}
       <header className="h-14 border-b border-brutal-white/20 flex items-center justify-between px-6 bg-brutal-black z-20">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-claw-red flex items-center justify-center font-bold text-black rotate-12">P</div>
-          <span className="font-bold tracking-tighter text-xl italic">POKEMOTION <span className="text-claw-red">CORE</span></span>
+          <span className="font-bold tracking-tighter text-xl italic">SKECHZZ <span className="text-claw-red">BROKEN_PENCIL</span></span>
         </div>
-        
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 text-xs opacity-60">
             <Monitor size={14} />
@@ -304,23 +404,20 @@ export default function App() {
             disabled={isExporting}
             className="flex items-center gap-2 bg-claw-red text-black px-4 py-1 font-bold hover:translate-x-1 hover:-translate-y-1 transition-transform shadow-[4px_4px_0px_#f2f2f2] disabled:opacity-50"
           >
-            {isExporting ? `RENDERING ${Math.round(exportProgress)}%` : <><Download size={16} /> EXPORT_SEQUENCE</>}
+            {isExporting ? `RENDERING ${Math.round(exportProgress)}%` : <><Download size={16} /> EXPORT_COMMERCIAL</>}
           </button>
         </div>
       </header>
-
       <main className="flex-1 flex overflow-hidden">
-        {/* --- Left Sidebar: Assets & Layers --- */}
         <aside className="w-72 border-r border-brutal-white/20 flex flex-col bg-brutal-black">
           <div className="p-4 flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-brutal-white/10 pb-2">
-              <span className="text-xs font-bold uppercase tracking-widest">Assets</span>
+              <span className="text-xs font-bold uppercase tracking-widest">Add_Item</span>
               <label className="cursor-pointer hover:text-claw-red transition-colors">
                 <Upload size={16} />
                 <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/*" />
               </label>
             </div>
-            
             <div className="grid grid-cols-3 gap-2">
               <button onClick={() => addLayer('text')} className="flex flex-col items-center gap-1 p-2 border border-brutal-white/10 hover:border-claw-red transition-colors">
                 <Type size={18} />
@@ -332,10 +429,9 @@ export default function App() {
               </button>
             </div>
           </div>
-
           <div className="flex-1 overflow-y-auto p-4">
              <div className="flex items-center justify-between border-b border-brutal-white/10 pb-2 mb-4">
-              <span className="text-xs font-bold uppercase tracking-widest">Sequence Layers</span>
+              <span className="text-xs font-bold uppercase tracking-widest">Story_Layers</span>
             </div>
             <div className="flex flex-col gap-2">
               {layers.map(layer => (
@@ -356,8 +452,6 @@ export default function App() {
             </div>
           </div>
         </aside>
-
-        {/* --- Center: Canvas Preview --- */}
         <section className="flex-1 flex flex-col bg-[#0a0a0a] relative">
           <div className="flex-1 flex items-center justify-center p-8 overflow-hidden">
             <div className="relative shadow-[20px_20px_0px_rgba(0,0,0,0.5)] border border-brutal-white/10 bg-black"
@@ -368,17 +462,12 @@ export default function App() {
                    maxHeight: '100%',
                    aspectRatio: `${resolution.width} / ${resolution.height}`
                  }}>
-              <canvas 
-                ref={canvasRef} 
-                className="w-full h-full block"
-              />
+              <canvas ref={canvasRef} className="w-full h-full block" />
               <div className="absolute -top-6 left-0 text-[10px] text-brutal-white/40 uppercase tracking-tighter">
-                Live_Render_Buffer :: {resolution.width}x{resolution.height}
+                COMMERCIAL_PREVIEW_BUFFER
               </div>
             </div>
           </div>
-
-          {/* --- Timeline --- */}
           <div className="h-64 border-t border-brutal-white/20 bg-brutal-black flex flex-col">
             <div className="h-10 border-b border-brutal-white/10 flex items-center px-4 justify-between bg-black">
               <div className="flex items-center gap-4">
@@ -392,27 +481,16 @@ export default function App() {
                   {currentTime.toFixed(2)}s / {duration.toFixed(2)}s
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                 <Scissors size={14} className="opacity-40 hover:opacity-100 cursor-pointer" />
-                 <Move size={14} className="opacity-40 hover:opacity-100 cursor-pointer" />
-              </div>
             </div>
-            
             <div className="flex-1 overflow-x-auto overflow-y-auto relative p-4 custom-scrollbar">
-               {/* Timeline Grid */}
                <div className="absolute top-0 left-0 h-full w-full pointer-events-none opacity-5" 
                     style={{ backgroundImage: 'linear-gradient(90deg, #f2f2f2 1px, transparent 1px)', backgroundSize: '100px 100%' }} />
-               
-               {/* Playhead */}
-               <div 
-                 ref={playheadRef}
-                 className="absolute top-0 bottom-0 w-px bg-claw-red z-10 pointer-events-none shadow-[0_0_8px_#e63946]"
+               <div className="absolute top-0 bottom-0 w-px bg-claw-red z-10 pointer-events-none shadow-[0_0_8px_#e63946]"
                  style={{ left: `${(currentTime / duration) * 100}%` }}
                >
                  <div className="absolute -top-1 -left-[5px] w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[8px] border-t-claw-red" />
                </div>
-
-               <div className="flex flex-col gap-2 min-w-full" style={{ width: '200%' }}>
+               <div className="flex flex-col gap-2 min-w-full" style={{ width: '100%' }}>
                  {layers.map(layer => (
                    <div key={layer.id} className="h-8 flex relative group">
                      <div 
@@ -432,13 +510,11 @@ export default function App() {
             </div>
           </div>
         </section>
-
-        {/* --- Right Sidebar: Inspector --- */}
         <aside className="w-80 border-l border-brutal-white/20 bg-brutal-black overflow-y-auto p-6">
           {!selectedLayer ? (
             <div className="h-full flex flex-col items-center justify-center opacity-20 text-center">
               <Settings size={48} className="mb-4" />
-              <p className="text-xs uppercase tracking-widest font-bold">Select a layer<br/>to edit properties</p>
+              <p className="text-xs uppercase tracking-widest font-bold">Select_Layer_To_Tune</p>
             </div>
           ) : (
             <div className="flex flex-col gap-8">
@@ -451,7 +527,6 @@ export default function App() {
                   className="w-full bg-transparent border-b border-brutal-white/20 py-2 focus:border-claw-red outline-none text-sm"
                 />
               </div>
-
               {selectedLayer.type === 'text' && (
                 <div>
                   <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-4 text-claw-red">Typography</h3>
@@ -460,7 +535,6 @@ export default function App() {
                     onChange={(e) => updateLayerProps(selectedLayer.id, { text: e.target.value })}
                     className="w-full bg-[#111] border border-brutal-white/10 p-3 mb-4 h-24 text-sm resize-none focus:border-claw-red outline-none"
                   />
-                  
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-col gap-2">
                       <label className="text-[10px] opacity-40">FONT_FAMILY</label>
@@ -472,99 +546,58 @@ export default function App() {
                         {FONTS.map(f => <option key={f} value={f}>{f.toUpperCase()}</option>)}
                       </select>
                     </div>
-                    
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex flex-col gap-2">
                         <label className="text-[10px] opacity-40">SIZE</label>
-                        <input 
-                          type="number" 
-                          value={selectedLayer.props.fontSize}
-                          onChange={(e) => updateLayerProps(selectedLayer.id, { fontSize: parseInt(e.target.value) })}
-                          className="bg-black border border-brutal-white/10 p-2 text-xs"
-                        />
+                        <input type="number" value={selectedLayer.props.fontSize} onChange={(e) => updateLayerProps(selectedLayer.id, { fontSize: parseInt(e.target.value) })} className="bg-black border border-brutal-white/10 p-2 text-xs" />
                       </div>
                       <div className="flex flex-col gap-2">
                         <label className="text-[10px] opacity-40">COLOR</label>
                         <div className="flex gap-2">
-                          <input 
-                            type="color" 
-                            value={selectedLayer.props.color}
-                            onChange={(e) => updateLayerProps(selectedLayer.id, { color: e.target.value })}
-                            className="w-8 h-8 bg-transparent border-none p-0 cursor-pointer"
-                          />
-                          <input 
-                            type="text" 
-                            value={selectedLayer.props.color.toUpperCase()}
-                            onChange={(e) => updateLayerProps(selectedLayer.id, { color: e.target.value })}
-                            className="bg-black border border-brutal-white/10 p-2 text-xs flex-1 uppercase"
-                          />
+                          <input type="color" value={selectedLayer.props.color} onChange={(e) => updateLayerProps(selectedLayer.id, { color: e.target.value })} className="w-8 h-8 bg-transparent border-none p-0 cursor-pointer" />
+                          <input type="text" value={selectedLayer.props.color.toUpperCase()} onChange={(e) => updateLayerProps(selectedLayer.id, { color: e.target.value })} className="bg-black border border-brutal-white/10 p-2 text-xs flex-1 uppercase" />
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
-
               <div>
                 <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-4 text-claw-red">Motion & Transform</h3>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-6">
                   {[
-                    { label: 'POS_X', key: 'x' },
-                    { label: 'POS_Y', key: 'y' },
-                    { label: 'SCALE', key: 'scale', step: 0.1 },
-                    { label: 'ROTATION', key: 'rotation' },
+                    { label: 'POS_X', key: 'x' }, { label: 'POS_Y', key: 'y' },
+                    { label: 'SCALE', key: 'scale', step: 0.1 }, { label: 'ROTATION', key: 'rotation' },
                     { label: 'OPACITY', key: 'opacity', step: 0.1, max: 1 }
                   ].map(prop => (
                     <div key={prop.key} className="flex flex-col gap-2">
                       <label className="text-[10px] opacity-40">{prop.label}</label>
-                      <input 
-                        type="number" 
-                        step={prop.step || 1}
-                        value={selectedLayer.props[prop.key]}
-                        onChange={(e) => updateLayerProps(selectedLayer.id, { [prop.key]: parseFloat(e.target.value) })}
-                        className="bg-black border border-brutal-white/10 p-2 text-xs"
-                      />
+                      <input type="number" step={prop.step || 1} value={selectedLayer.props[prop.key]} onChange={(e) => updateLayerProps(selectedLayer.id, { [prop.key]: parseFloat(e.target.value) })} className="bg-black border border-brutal-white/10 p-2 text-xs" />
                     </div>
                   ))}
                 </div>
               </div>
-
               <div>
                 <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-4 text-claw-red">Sequence FX</h3>
                 <div className="flex flex-col gap-2">
                    <label className="text-[10px] opacity-40">ANIMATION_PRESET</label>
-                   <select 
-                     value={selectedLayer.props.animation}
-                     onChange={(e) => updateLayerProps(selectedLayer.id, { animation: e.target.value })}
-                     className="bg-black border border-brutal-white/10 p-2 text-xs"
-                   >
+                   <select value={selectedLayer.props.animation} onChange={(e) => updateLayerProps(selectedLayer.id, { animation: e.target.value })} className="bg-black border border-brutal-white/10 p-2 text-xs">
                      {Object.values(ANIMATION_PRESETS).map(v => <option key={v} value={v}>{v.toUpperCase()}</option>)}
                    </select>
                 </div>
-              </div>
-              
-              <div className="pt-8 border-t border-brutal-white/10">
-                <button 
-                  onClick={() => deleteLayer(selectedLayer.id)}
-                  className="w-full border border-claw-red text-claw-red p-3 text-[10px] font-bold hover:bg-claw-red hover:text-black transition-colors"
-                >
-                  PURGE_LAYER_DATA
-                </button>
               </div>
             </div>
           )}
         </aside>
       </main>
-
-      {/* --- Global Notifications/Status --- */}
       <footer className="h-6 bg-claw-red text-black flex items-center px-4 justify-between text-[10px] font-bold">
         <div className="flex gap-4">
-          <span>SYSTEM_READY</span>
-          <span>MEMORY_OK</span>
-          <span>LAYERS: {layers.length}</span>
+          <span>SKECHZZ_ENGINE_COMMERCIAL_READY</span>
+          <span>MEM_LOCK: OK</span>
+          <span>STORY_POINTS: {layers.length}</span>
         </div>
         <div>
-          POKEMOTION_V2.0_ENGINE // BUILD_2026.06.10
+          POKEMOTION_V2.0_CORE // BUILD_2026.06.10
         </div>
       </footer>
     </div>
