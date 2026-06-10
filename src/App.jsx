@@ -1,3 +1,4 @@
+// v3.0.1-hotfix - robust media recorder fallbacks
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Download, Loader2, Zap, Smartphone, Monitor,
@@ -49,6 +50,7 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   
+  // Customization States
   const [layers, setLayers] = useState([
     { id: 'bg', type: 'image', start: 0, end: 10, src: FALLBACK_IMAGE },
     { id: 't1', type: 'text', start: 0.5, end: 3, text: 'TRASH TOOLS.', font: '800 140px "JetBrains Mono"', color: COLORS.OFF_WHITE, sfx: 'SHUTTER' },
@@ -88,6 +90,7 @@ export default function App() {
     ctx.fillStyle = COLORS.DEEP_BLACK;
     ctx.fillRect(0, 0, width, height);
 
+    // Background Image
     const imgLayer = layers.find(l => l.type === 'image');
     if (imgLayer && !assetsRef.current[imgLayer.src]) {
       const img = new Image();
@@ -109,9 +112,10 @@ export default function App() {
       ctx.restore();
     }
 
+    // Text Layers
     layers.filter(l => l.type === 'text' && time >= l.start && time <= l.end).forEach(l => {
       ctx.save();
-      const p = (time - l.start) / 0.5;
+      const p = (time - l.start) / 0.5; // 500ms reveal
       const alpha = Math.min(p, 1);
       const scale = 1.2 - (Math.min(p, 1) * 0.2);
       
@@ -131,6 +135,7 @@ export default function App() {
       ctx.restore();
     });
 
+    // Grain & Overlays
     if (globalSettings.grainIntensity > 0) {
       ctx.save();
       ctx.globalAlpha = globalSettings.grainIntensity;
@@ -141,6 +146,7 @@ export default function App() {
       ctx.restore();
     }
 
+    // Border
     ctx.strokeStyle = preset.accent;
     ctx.lineWidth = 10;
     ctx.strokeRect(0, 0, width, height);
@@ -178,26 +184,50 @@ export default function App() {
     setIsExporting(true);
     setIsPlaying(false);
     setCurrentTime(0);
-    const stream = canvasRef.current.captureStream(60);
-    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-    const chunks = [];
-    recorder.ondataavailable = e => chunks.push(e.data);
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'RGK_PREMIUM_EXPORT.webm'; a.click();
-      setIsExporting(false); setExportProgress(0);
-    };
-    recorder.start();
-    setIsPlaying(true);
-    const checkProgress = setInterval(() => {
-      setExportProgress((currentTime / duration) * 100);
-      if (currentTime >= duration - 0.1) {
-        clearInterval(checkProgress);
-        recorder.stop();
-        setIsPlaying(false);
+    
+    try {
+      const stream = canvasRef.current.captureStream(60);
+      let options = { mimeType: 'video/webm;codecs=vp9' };
+      
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        console.warn('VP9 not supported, falling back to webm');
+        options = { mimeType: 'video/webm' };
       }
-    }, 100);
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        console.warn('WebM not supported, falling back to mp4');
+        options = { mimeType: 'video/mp4' };
+      }
+
+      const recorder = new MediaRecorder(stream, options);
+      const chunks = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: options.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `RGK_EXPORT_${Date.now()}.${options.mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+        a.click();
+        setIsExporting(false);
+        setExportProgress(0);
+      };
+      
+      recorder.start();
+      setIsPlaying(true);
+      
+      const checkProgress = setInterval(() => {
+        setExportProgress((currentTime / duration) * 100);
+        if (currentTime >= duration - 0.1) {
+          clearInterval(checkProgress);
+          recorder.stop();
+          setIsPlaying(false);
+        }
+      }, 100);
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Export failed: Your browser may not support canvas recording.');
+      setIsExporting(false);
+    }
   };
 
   const updateLayer = (id, fields) => {
@@ -216,6 +246,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-mono flex flex-col md:flex-row overflow-hidden">
+      {/* Sidebar - Desktop */}
       <aside className="w-full md:w-80 border-r border-white/10 bg-black/40 backdrop-blur-xl z-50 flex flex-col h-screen overflow-y-auto">
         <div className="p-6 border-b border-white/10 flex items-center gap-3">
           <div className="bg-[#e63946] px-3 py-1 text-black font-black italic">RGK</div>
@@ -223,6 +254,7 @@ export default function App() {
         </div>
 
         <div className="p-4 space-y-8">
+          {/* Presets */}
           <section>
             <h3 className="text-[10px] uppercase tracking-tighter opacity-40 mb-4 flex items-center gap-2">
               <Palette size={12} /> Visual_Presets
@@ -240,6 +272,7 @@ export default function App() {
             </div>
           </section>
 
+          {/* Layers List */}
           <section>
             <h3 className="text-[10px] uppercase tracking-tighter opacity-40 mb-4 flex items-center gap-2">
               <Type size={12} /> Text_Layers
@@ -258,6 +291,7 @@ export default function App() {
             </div>
           </section>
 
+          {/* Global Settings */}
           <section>
             <h3 className="text-[10px] uppercase tracking-tighter opacity-40 mb-4 flex items-center gap-2">
               <Sliders size={12} /> Engine_Settings
@@ -276,6 +310,7 @@ export default function App() {
         </div>
       </aside>
 
+      {/* Main Preview Area */}
       <main className="flex-1 flex flex-col bg-[#080808] relative">
         <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 z-40">
           <div className="flex gap-4">
@@ -304,6 +339,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* Timeline Bar */}
         <div className="px-8 pb-8">
            <div className="w-full h-1 bg-white/5 relative cursor-pointer" onClick={(e) => {
              const rect = e.currentTarget.getBoundingClientRect();
@@ -321,6 +357,7 @@ export default function App() {
            </div>
         </div>
 
+        {/* Floating Inspector Panel (Mobile Friendly) */}
         {selectedLayer && (
           <div className="absolute bottom-24 right-8 w-80 bg-black/90 border border-white/10 p-5 backdrop-blur-2xl rounded-lg shadow-2xl z-50">
              <div className="flex justify-between items-center mb-6">
