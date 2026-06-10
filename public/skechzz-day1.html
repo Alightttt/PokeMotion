@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skechzz - Day 1 Macro Establish</title>
+    <style>
+        :root {
+            --gold: #D4AF37;
+            --black: #0A0A0A;
+            --white: #F5F5F5;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 1080px;
+            height: 1920px;
+            background-color: var(--black);
+            color: var(--white);
+            font-family: 'Playfair Display', serif;
+            overflow: hidden;
+        }
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .canvas-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://poke.com/media/5fb0cc73-8d4f-5749-bfab-70c1be3936bf');
+            background-size: 300%;
+            background-position: center 20%;
+            filter: contrast(1.1) brightness(0.9);
+            animation: panMacro 10s ease-in-out forwards;
+        }
+        @keyframes panMacro {
+            0% { background-position: 45% 20%; background-size: 350%; }
+            100% { background-position: 55% 25%; background-size: 300%; }
+        }
+        .overlay {
+            position: absolute;
+            bottom: 15%;
+            left: 10%;
+            right: 10%;
+            text-align: center;
+            z-index: 10;
+        }
+        .hook {
+            font-size: 48px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            line-height: 1.4;
+            opacity: 0;
+            animation: fadeInUp 1.5s ease-out 1s forwards;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.8);
+        }
+        .sub-hook {
+            font-size: 24px;
+            color: var(--gold);
+            text-transform: uppercase;
+            letter-spacing: 8px;
+            margin-top: 20px;
+            opacity: 0;
+            animation: fadeInUp 1.5s ease-out 2s forwards;
+        }
+        .logo {
+            position: absolute;
+            top: 10%;
+            font-size: 32px;
+            letter-spacing: 12px;
+            font-weight: 700;
+            color: var(--gold);
+            opacity: 0.8;
+        }
+        @keyframes fadeInUp {
+            from { transform: translateY(30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 0 300px rgba(0,0,0,0.9);
+            pointer-events: none;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="canvas-bg"></div>
+        <div class="vignette"></div>
+        <div class="logo">S K E C H Z Z</div>
+        <div class="overlay">
+            <div class="hook">POV: This is what a $300 sketch looks like before the first stroke.</div>
+            <div class="sub-hook">Macro Establish // Day 1</div>
+        </div>
+    </div>
+</body>
+</html>
