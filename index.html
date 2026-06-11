@@ -38,13 +38,52 @@
         canvas { touch-action: none; background: var(--white); border: 4px solid var(--black); }
         #ui-layer { pointer-events: none; }
         #ui-layer button { pointer-events: auto; }
+        #telemetry-hud { pointer-events: none; text-shadow: 1px 1px 0px rgba(0,0,0,0.5); }
+        .hamburger-menu {
+            pointer-events: auto;
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 100;
+            background: var(--gold);
+            border: 3px solid var(--black);
+            box-shadow: 4px 4px 0px var(--black);
+            padding: 0.5rem;
+        }
+        .menu-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 90;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+        }
+        .menu-overlay.active { display: flex; }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center p-4">
+<body class="flex flex-col items-center justify-center">
+
+    <!-- HAMBURGER MENU -->
+    <button onclick="toggleMenu()" class="hamburger-menu hidden" id="menu-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="square">
+            <path d="M3 12h18M3 6h18M3 18h18"/>
+        </svg>
+    </button>
+
+    <div id="menu-overlay" class="menu-overlay">
+        <h2 class="header-font text-5xl text-[var(--gold)] mb-4 italic">ARCADE_SWITCH</h2>
+        <button onclick="switchGame('pong')" class="brutalist-card px-8 py-4 text-2xl font-black italic w-64 uppercase">Ping Pong</button>
+        <button onclick="switchGame('carrom')" class="brutalist-card px-8 py-4 text-2xl font-black italic w-64 uppercase">Carrom</button>
+        <button onclick="switchGame('hockey')" class="brutalist-card px-8 py-4 text-2xl font-black italic w-64 uppercase">Air Hockey</button>
+        <button onclick="exitGame()" class="bg-red-700 text-white border-4 border-black px-8 py-4 text-2xl font-black italic w-64 uppercase mt-8">Exit Arcade</button>
+    </div>
 
     <!-- LOBBY -->
-    <div id="lobby" class="w-full max-w-md space-y-6">
-        <h1 class="header-font text-6xl text-center text-[var(--gold)] mb-8 tracking-tighter">AGENT ARCADE</h1>
+    <div id="lobby" class="w-full max-w-md space-y-6 px-4">
+        <h1 class="header-font text-6xl text-center text-[var(--gold)] mb-8 tracking-tighter italic">AGENT ARCADE</h1>
         
         <div class="grid grid-cols-1 gap-6">
             <button onclick="startGame('pong')" class="brutalist-card p-6 text-left group">
@@ -79,12 +118,21 @@
     <!-- GAME VIEW -->
     <div id="game-container" class="hidden fixed inset-0 flex flex-col bg-black">
         <canvas id="game-canvas"></canvas>
-        <div id="ui-layer" class="fixed inset-0 flex flex-col justify-between p-4 mono-font font-bold">
-            <div class="flex justify-between items-center text-black bg-[var(--gold)] p-2 border-2 border-black">
-                <span>POKE: <span id="poke-score">0</span></span>
-                <button onclick="exitGame()" class="bg-black text-white px-4 py-1 border-2 border-white hover:bg-red-700">EXIT</button>
-                <span>USER: <span id="user-score">0</span></span>
+        
+        <!-- AI TELEMETRY HUD -->
+        <div id="telemetry-hud" class="fixed top-4 left-4 mono-font text-[10px] text-[var(--gold)] space-y-1 uppercase tracking-wider">
+            <div class="flex gap-4">
+                <span>LATENCY: <span id="tele-latency">0</span>MS</span>
+                <span>FPS: <span id="tele-fps">0</span></span>
             </div>
+            <div>TARGET: [<span id="tele-target">0, 0</span>]</div>
+            <div>VECTOR: [<span id="tele-vector">0.00, 0.00</span>]</div>
+            <div class="text-white italic mt-2 border-l-2 border-[var(--gold)] pl-2" id="tele-stream">INITIALIZING_AGENT_LOGIC...</div>
+        </div>
+
+        <div id="ui-layer" class="fixed bottom-0 left-0 right-0 flex justify-between items-center text-black bg-[var(--gold)] p-3 border-t-4 border-black mono-font font-bold">
+            <span class="italic text-xl">POKE: <span id="poke-score">0</span></span>
+            <span class="italic text-xl">USER: <span id="user-score">0</span></span>
         </div>
     </div>
 
@@ -94,6 +142,45 @@
         let currentGame = null;
         let animationId = null;
         let scores = { user: 0, poke: 0 };
+        let lastTime = 0;
+        let fps = 0;
+
+        // Telemetry state
+        const tele = {
+            latency: 45,
+            targetX: 0,
+            targetY: 0,
+            vx: 0,
+            vy: 0,
+            stream: "AWAITING_CHALLENGE..."
+        };
+
+        const THOUGHTS = {
+            pong: ["ANALYZING_SPIN_CURVE...", "CALCULATING_BOUNCE_VECTOR...", "PREEMPTING_SMASH...", "PADDLE_CENTER_ALIGNED..."],
+            carrom: ["MAPPING_BANK_SHOT...", "FRICTION_DECAY_SYNC...", "OPTIMIZING_STRIKE_FORCE...", "COIN_POSITION_LOCKED..."],
+            hockey: ["ELASTIC_MOMENTUM_CALC...", "MALLET_VELOCITY_ADAPT...", "DEFENSIVE_ARC_ACTIVE...", "PUCK_TRACKING_ON..."]
+        };
+
+        function updateTelemetry() {
+            document.getElementById('tele-latency').innerText = (tele.latency + Math.random()*5 - 2).toFixed(0);
+            document.getElementById('tele-fps').innerText = fps || 60;
+            document.getElementById('tele-target').innerText = `${tele.targetX.toFixed(0)}, ${tele.targetY.toFixed(0)}`;
+            document.getElementById('tele-vector').innerText = `${tele.vx.toFixed(2)}, ${tele.vy.toFixed(2)}`;
+            if(Math.random() < 0.01 && currentGame) {
+                const pool = THOUGHTS[currentGame];
+                document.getElementById('tele-stream').innerText = pool[Math.floor(Math.random()*pool.length)];
+            }
+        }
+
+        function toggleMenu() {
+            document.getElementById('menu-overlay').classList.toggle('active');
+        }
+
+        function switchGame(mode) {
+            cancelAnimationFrame(animationId);
+            document.getElementById('menu-overlay').classList.remove('active');
+            startGame(mode);
+        }
 
         // Audio Engine
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -117,16 +204,20 @@
         function startGame(mode) {
             document.getElementById('lobby').classList.add('hidden');
             document.getElementById('game-container').classList.remove('hidden');
+            document.getElementById('menu-btn').classList.remove('hidden');
             currentGame = mode;
             resize();
             initGame();
+            lastTime = performance.now();
             loop();
         }
 
         function exitGame() {
             cancelAnimationFrame(animationId);
             document.getElementById('game-container').classList.add('hidden');
+            document.getElementById('menu-btn').classList.add('hidden');
             document.getElementById('lobby').classList.remove('hidden');
+            document.getElementById('menu-overlay').classList.remove('active');
             scores = { user: 0, poke: 0 };
             updateScores();
         }
@@ -143,30 +234,28 @@
         window.addEventListener('resize', resize);
 
         // Physics State
-        let ball, userPaddle, pokePaddle, puck, userMallet, pokeMallet, coins = [];
+        let ball, userPaddle, pokePaddle, puck, userMallet, pokeMallet, coins = [], striker;
         let touchX = 0, touchY = 0, isTouching = false;
 
         function initGame() {
             if (currentGame === 'pong') {
-                ball = { x: canvas.width/2, y: canvas.height/2, vx: 5, vy: 5, r: 10 };
-                userPaddle = { x: canvas.width/2 - 50, y: canvas.height - 40, w: 100, h: 20 };
-                pokePaddle = { x: canvas.width/2 - 50, y: 20, w: 100, h: 20 };
+                ball = { x: canvas.width/2, y: canvas.height/2, vx: 5, vy: 5, r: 10, spin: 0 };
+                userPaddle = { x: canvas.width/2 - 60, y: canvas.height - 80, w: 120, h: 20 };
+                pokePaddle = { x: canvas.width/2 - 60, y: 60, w: 120, h: 20 };
             } else if (currentGame === 'hockey') {
-                puck = { x: canvas.width/2, y: canvas.height/2, vx: 0, vy: 0, r: 20, friction: 0.98 };
-                userMallet = { x: canvas.width/2, y: canvas.height * 0.8, r: 35 };
-                pokeMallet = { x: canvas.width/2, y: canvas.height * 0.2, r: 35 };
+                puck = { x: canvas.width/2, y: canvas.height/2, vx: 0, vy: 0, r: 25, friction: 0.99, mass: 1 };
+                userMallet = { x: canvas.width/2, y: canvas.height * 0.8, r: 45, mass: 5, vx: 0, vy: 0 };
+                pokeMallet = { x: canvas.width/2, y: canvas.height * 0.2, r: 45, mass: 5, vx: 0, vy: 0 };
             } else if (currentGame === 'carrom') {
                 coins = [];
                 const centerX = canvas.width/2;
                 const centerY = canvas.height/2;
-                // Queen
-                coins.push({ x: centerX, y: centerY, r: 15, color: '#D4AF37', type: 'queen', vx: 0, vy: 0 });
-                // Simple circle of coins
-                for(let i=0; i<6; i++) {
-                    const ang = (i / 6) * Math.PI * 2;
-                    coins.push({ x: centerX + Math.cos(ang)*40, y: centerY + Math.sin(ang)*40, r: 15, color: i%2===0 ? '#000' : '#B22222', type: 'coin', vx: 0, vy: 0 });
+                coins.push({ x: centerX, y: centerY, r: 18, color: '#D4AF37', type: 'queen', vx: 0, vy: 0, mass: 1 });
+                for(let i=0; i<8; i++) {
+                    const ang = (i / 8) * Math.PI * 2;
+                    coins.push({ x: centerX + Math.cos(ang)*50, y: centerY + Math.sin(ang)*50, r: 18, color: i%2===0 ? '#000' : '#B22222', type: 'coin', vx: 0, vy: 0, mass: 1 });
                 }
-                userMallet = { x: canvas.width/2, y: canvas.height * 0.85, r: 25, active: false };
+                striker = { x: canvas.width/2, y: canvas.height * 0.85, r: 28, color: '#F5F5F5', vx: 0, vy: 0, mass: 2, moving: false };
             }
         }
 
@@ -177,169 +266,131 @@
         });
 
         canvas.addEventListener('touchmove', (e) => {
-            touchX = e.touches[0].clientX;
-            touchY = e.touches[0].clientY;
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            
             if (currentGame === 'pong') {
-                userPaddle.x = touchX - userPaddle.w / 2;
+                userPaddle.x = currentX - userPaddle.w / 2;
             } else if (currentGame === 'hockey') {
-                userMallet.x = touchX;
-                userMallet.y = Math.max(canvas.height/2 + userMallet.r, touchY);
+                userMallet.vx = currentX - userMallet.x;
+                userMallet.vy = currentY - userMallet.y;
+                userMallet.x = currentX;
+                userMallet.y = Math.max(canvas.height/2 + userMallet.r, currentY);
+            } else if (currentGame === 'carrom' && !striker.moving) {
+                striker.x = currentX;
             }
+            touchX = currentX;
+            touchY = currentY;
         });
 
-        canvas.addEventListener('touchend', () => isTouching = false);
+        canvas.addEventListener('touchend', () => {
+            if(currentGame === 'carrom' && isTouching && !striker.moving) {
+                striker.vx = 0; striker.vy = -20; striker.moving = true;
+                playSound(600, 'square', 0.2);
+            }
+            isTouching = false;
+        });
 
-        function loop() {
+        function loop(timestamp) {
+            fps = Math.round(1000 / (timestamp - lastTime));
+            lastTime = timestamp;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
             if (currentGame === 'pong') updatePong();
             else if (currentGame === 'hockey') updateHockey();
             else if (currentGame === 'carrom') updateCarrom();
 
+            updateTelemetry();
             animationId = requestAnimationFrame(loop);
         }
 
         function updatePong() {
-            // Draw
             ctx.fillStyle = '#000';
             ctx.fillRect(userPaddle.x, userPaddle.y, userPaddle.w, userPaddle.h);
             ctx.fillRect(pokePaddle.x, pokePaddle.y, pokePaddle.w, pokePaddle.h);
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
 
-            // Logic
-            ball.x += ball.vx;
+            ball.x += ball.vx + ball.spin;
             ball.y += ball.vy;
+            ball.spin *= 0.99;
 
-            // Walls
-            if (ball.x < 0 || ball.x > canvas.width) {
-                ball.vx *= -1;
-                playSound(200, 'square', 0.1);
-            }
+            if (ball.x < ball.r || ball.x > canvas.width - ball.r) { ball.vx *= -1; playSound(200, 'square', 0.1); }
+            const targetX = ball.x - pokePaddle.w/2;
+            pokePaddle.x += (targetX - pokePaddle.x) * 0.15;
+            tele.vx = ball.vx; tele.vy = ball.vy; tele.targetX = ball.x; tele.targetY = ball.y;
 
-            // AI (Poke)
-            const aiSpeed = 4.5;
-            if (pokePaddle.x + pokePaddle.w/2 < ball.x) pokePaddle.x += aiSpeed;
-            else pokePaddle.x -= aiSpeed;
-
-            // Collision
             if (ball.y + ball.r > userPaddle.y && ball.x > userPaddle.x && ball.x < userPaddle.x + userPaddle.w) {
-                ball.vy *= -1.05;
-                ball.y = userPaddle.y - ball.r;
-                playSound(150, 'sine', 0.15);
-                triggerHaptic();
+                const impact = (ball.x - (userPaddle.x + userPaddle.w/2)) / (userPaddle.w/2);
+                ball.vx = impact * 8; ball.vy = -Math.abs(ball.vy) * 1.05; ball.spin = impact * 2; ball.y = userPaddle.y - ball.r;
+                playSound(150, 'sine', 0.15); triggerHaptic();
             }
             if (ball.y - ball.r < pokePaddle.y + pokePaddle.h && ball.x > pokePaddle.x && ball.x < pokePaddle.x + pokePaddle.w) {
-                ball.vy *= -1.05;
-                ball.y = pokePaddle.y + pokePaddle.h + ball.r;
+                const impact = (ball.x - (pokePaddle.x + pokePaddle.w/2)) / (pokePaddle.w/2);
+                ball.vx = impact * 8; ball.vy = Math.abs(ball.vy) * 1.05; ball.y = pokePaddle.y + pokePaddle.h + ball.r;
                 playSound(150, 'sine', 0.15);
             }
-
-            // Score
             if (ball.y < 0) { scores.user++; resetBall(); }
             if (ball.y > canvas.height) { scores.poke++; resetBall(); }
         }
 
-        function resetBall() {
-            ball.x = canvas.width/2;
-            ball.y = canvas.height/2;
-            ball.vx = 5 * (Math.random() > 0.5 ? 1 : -1);
-            ball.vy = 5;
-            updateScores();
-            playSound(100, 'sawtooth', 0.5);
+        function resolveCircleCollision(c1, c2) {
+            const dx = c2.x - c1.x; const dy = c2.y - c1.y; const distance = Math.sqrt(dx*dx + dy*dy);
+            if (distance < c1.r + c2.r) {
+                const angle = Math.atan2(dy, dx); const sin = Math.sin(angle), cos = Math.cos(angle);
+                const vx1 = c1.vx * cos + c1.vy * sin; const vy1 = c1.vy * cos - c1.vx * sin;
+                const vx2 = c2.vx * cos + c2.vy * sin; const vy2 = c2.vy * cos - c2.vx * sin;
+                const vxTotal = vx1 - vx2;
+                const vx1After = ((c1.mass - c2.mass) * vx1 + 2 * c2.mass * vx2) / (c1.mass + c2.mass);
+                const vx2After = vxTotal + vx1After;
+                c1.vx = vx1After * cos - vy1 * sin; c1.vy = vy1 * cos + vx1After * sin;
+                c2.vx = vx2After * cos - vy2 * sin; c2.vy = vy2 * cos + vx2After * sin;
+                const overlap = (c1.r + c2.r - distance) + 1;
+                c1.x -= cos * (overlap/2); c1.y -= sin * (overlap/2);
+                c2.x += cos * (overlap/2); c2.y += sin * (overlap/2);
+                playSound(300, 'triangle', 0.1); return true;
+            }
+            return false;
         }
 
         function updateHockey() {
-            // Logic puck
-            puck.x += puck.vx;
-            puck.y += puck.vy;
-            puck.vx *= puck.friction;
-            puck.vy *= puck.friction;
-
-            // Walls
-            if (puck.x < puck.r || puck.x > canvas.width - puck.r) puck.vx *= -1;
+            puck.x += puck.vx; puck.y += puck.vy; puck.vx *= puck.friction; puck.vy *= puck.friction;
+            if (puck.x < puck.r || puck.x > canvas.width - puck.r) { puck.vx *= -1; puck.x = puck.x < puck.r ? puck.r : canvas.width - puck.r; }
             if (puck.y < puck.r || puck.y > canvas.height - puck.r) {
                 if (puck.x > canvas.width * 0.3 && puck.x < canvas.width * 0.7) {
                     if (puck.y < canvas.height/2) scores.user++; else scores.poke++;
-                    puck.x = canvas.width/2; puck.y = canvas.height/2; puck.vx = 0; puck.vy = 0;
-                    updateScores();
-                    playSound(80, 'sawtooth', 0.8, 0.2);
-                } else {
-                    puck.vy *= -1;
-                }
+                    puck.x = canvas.width/2; puck.y = canvas.height/2; puck.vx = 0; puck.vy = 0; updateScores();
+                } else { puck.vy *= -1; puck.y = puck.y < puck.r ? puck.r : canvas.height - puck.r; }
             }
-
-            // AI Poke
-            pokeMallet.x += (puck.x - pokeMallet.x) * 0.1;
-            pokeMallet.y += (Math.min(canvas.height*0.2, puck.y - 100) - pokeMallet.y) * 0.1;
-
-            // Collision mallets
-            [userMallet, pokeMallet].forEach(m => {
-                const dx = puck.x - m.x;
-                const dy = puck.y - m.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                if (dist < puck.r + m.r) {
-                    const angle = Math.atan2(dy, dx);
-                    puck.vx = Math.cos(angle) * 15;
-                    puck.vy = Math.sin(angle) * 15;
-                    playSound(300, 'triangle', 0.1);
-                    if (m === userMallet) triggerHaptic();
-                }
-            });
-
-            // Draw
-            ctx.strokeStyle = '#000'; ctx.lineWidth = 10;
-            ctx.strokeRect(0, 0, canvas.width, canvas.height);
-            // Goals
-            ctx.fillStyle = '#D4AF37';
-            ctx.fillRect(canvas.width*0.3, 0, canvas.width*0.4, 10);
-            ctx.fillRect(canvas.width*0.3, canvas.height-10, canvas.width*0.4, 10);
-            
-            ctx.fillStyle = '#000';
-            ctx.beginPath(); ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#B22222';
-            ctx.beginPath(); ctx.arc(userMallet.x, userMallet.y, userMallet.r, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#D4AF37';
-            ctx.beginPath(); ctx.arc(pokeMallet.x, pokeMallet.y, pokeMallet.r, 0, Math.PI*2); ctx.fill();
+            pokeMallet.x += (puck.x - pokeMallet.x) * 0.15; pokeMallet.y += (Math.min(canvas.height*0.2, puck.y - 120) - pokeMallet.y) * 0.1;
+            tele.targetX = puck.x; tele.targetY = puck.y; tele.vx = puck.vx; tele.vy = puck.vy;
+            if(resolveCircleCollision(userMallet, puck)) triggerHaptic();
+            resolveCircleCollision(pokeMallet, puck);
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 10; ctx.strokeRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#B22222'; ctx.beginPath(); ctx.arc(userMallet.x, userMallet.y, userMallet.r, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#D4AF37'; ctx.beginPath(); ctx.arc(pokeMallet.x, pokeMallet.y, pokeMallet.r, 0, Math.PI*2); ctx.fill();
         }
 
         function updateCarrom() {
-            // Simplified Carrom Logic
-            coins.forEach(c => {
-                c.x += c.vx; c.y += c.vy;
-                c.vx *= 0.98; c.vy *= 0.98;
-                // Pocket check
-                if ((c.x < 30 || c.x > canvas.width-30) && (c.y < 30 || c.y > canvas.height-30)) {
-                    if (c.color === '#B22222') scores.user += 10;
-                    else if (c.color === '#000') scores.poke += 10;
-                    else if (c.type === 'queen') scores.user += 50;
-                    c.x = -1000; c.vx = 0; c.vy = 0;
+            ctx.fillStyle = '#F5F5F5'; ctx.fillRect(0,0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000'; [ [0,0], [canvas.width,0], [0,canvas.height], [canvas.width,canvas.height] ].forEach(p => { ctx.beginPath(); ctx.arc(p[0], p[1], 50, 0, Math.PI*2); ctx.fill(); });
+            const all = [striker, ...coins];
+            for(let i=0; i<all.length; i++) {
+                const c1 = all[i]; c1.x += c1.vx; c1.y += c1.vy; c1.vx *= 0.985; c1.vy *= 0.985;
+                if(c1.x < c1.r || c1.x > canvas.width - c1.r) { c1.vx *= -0.8; c1.x = c1.x < c1.r ? c1.r : canvas.width-c1.r; }
+                if(c1.y < c1.r || c1.y > canvas.height - c1.r) { c1.vy *= -0.8; c1.y = c1.y < c1.r ? c1.r : canvas.height-c1.r; }
+                if ((c1.x < 50 || c1.x > canvas.width-50) && (c1.y < 50 || c1.y > canvas.height-50)) {
+                    if (c1 === striker) { scores.user = Math.max(0, scores.user-10); c1.x = canvas.width/2; c1.y = canvas.height*0.85; c1.vx=0; c1.vy=0; c1.moving=false; }
+                    else { scores.user += 20; c1.x = -1000; }
                     updateScores();
-                    playSound(400, 'sine', 0.3);
                 }
-            });
-
-            // Draw Board
-            ctx.fillStyle = '#F5F5F5';
-            ctx.fillRect(0,0, canvas.width, canvas.height);
-            ctx.fillStyle = '#000';
-            // Pockets
-            [ [0,0], [canvas.width,0], [0,canvas.height], [canvas.width,canvas.height] ].forEach(p => {
-                ctx.beginPath(); ctx.arc(p[0], p[1], 40, 0, Math.PI*2); ctx.fill();
-            });
-
-            coins.forEach(c => {
-                ctx.fillStyle = c.color;
-                ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.fill();
-                ctx.strokeStyle = '#000'; ctx.stroke();
-            });
-
-            // Striker
-            ctx.fillStyle = '#D4AF37';
-            ctx.beginPath(); ctx.arc(userMallet.x, userMallet.y, userMallet.r, 0, Math.PI*2); ctx.fill();
+                for(let j=i+1; j<all.length; j++) resolveCircleCollision(c1, all[j]);
+            }
+            if(Math.abs(striker.vx) < 0.2 && Math.abs(striker.vy) < 0.2 && striker.moving) { striker.vx = 0; striker.vy = 0; striker.moving = false; striker.y = canvas.height * 0.85; }
+            coins.forEach(c => { if(c.x < 0) return; ctx.fillStyle = c.color; ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke(); });
+            ctx.fillStyle = striker.color; ctx.beginPath(); ctx.arc(striker.x, striker.y, striker.r, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke();
+            if(!striker.moving) { ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.moveTo(striker.x, striker.y); ctx.lineTo(striker.x, 0); ctx.stroke(); ctx.setLineDash([]); tele.targetX = striker.x; tele.targetY = 0; }
         }
-
     </script>
 </body>
 </html>
