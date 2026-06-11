@@ -1,12 +1,345 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PokeMotion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>AGENT ARCADE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@900&family=Poppins:wght@400;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #D4AF37;
+            --black: #000000;
+            --white: #F5F5F5;
+            --red: #B22222;
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--black);
+            color: var(--white);
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+            height: 100dvh;
+        }
+        .brutalist-card {
+            background: var(--white);
+            color: var(--black);
+            border: 4px solid var(--black);
+            box-shadow: 8px 8px 0px var(--gold);
+            transition: transform 0.1s;
+        }
+        .brutalist-card:active {
+            transform: translate(4px, 4px);
+            box-shadow: 4px 4px 0px var(--gold);
+        }
+        .header-font { font-family: 'Playfair Display', serif; }
+        .mono-font { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+        canvas { touch-action: none; background: var(--white); border: 4px solid var(--black); }
+        #ui-layer { pointer-events: none; }
+        #ui-layer button { pointer-events: auto; }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4">
+
+    <!-- LOBBY -->
+    <div id="lobby" class="w-full max-w-md space-y-6">
+        <h1 class="header-font text-6xl text-center text-[var(--gold)] mb-8 tracking-tighter">AGENT ARCADE</h1>
+        
+        <div class="grid grid-cols-1 gap-6">
+            <button onclick="startGame('pong')" class="brutalist-card p-6 text-left group">
+                <div class="flex justify-between items-start">
+                    <span class="mono-font text-sm font-bold">01.</span>
+                    <span class="text-xs uppercase tracking-widest font-bold opacity-50 text-[var(--red)]">Live Physics</span>
+                </div>
+                <h2 class="header-font text-3xl mt-2">PING PONG</h2>
+                <p class="text-sm mt-2 font-bold uppercase">Split Screen Duel vs Poke</p>
+            </button>
+
+            <button onclick="startGame('carrom')" class="brutalist-card p-6 text-left group">
+                <div class="flex justify-between items-start">
+                    <span class="mono-font text-sm font-bold">02.</span>
+                    <span class="text-xs uppercase tracking-widest font-bold opacity-50 text-[var(--red)]">Tactical Shoot</span>
+                </div>
+                <h2 class="header-font text-3xl mt-2">CARROM</h2>
+                <p class="text-sm mt-2 font-bold uppercase">Strike Coins into Pockets</p>
+            </button>
+
+            <button onclick="startGame('hockey')" class="brutalist-card p-6 text-left group">
+                <div class="flex justify-between items-start">
+                    <span class="mono-font text-sm font-bold">03.</span>
+                    <span class="text-xs uppercase tracking-widest font-bold opacity-50 text-[var(--red)]">High Velocity</span>
+                </div>
+                <h2 class="header-font text-3xl mt-2">AIR HOCKEY</h2>
+                <p class="text-sm mt-2 font-bold uppercase">Momentum Based Clash</p>
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME VIEW -->
+    <div id="game-container" class="hidden fixed inset-0 flex flex-col bg-black">
+        <canvas id="game-canvas"></canvas>
+        <div id="ui-layer" class="fixed inset-0 flex flex-col justify-between p-4 mono-font font-bold">
+            <div class="flex justify-between items-center text-black bg-[var(--gold)] p-2 border-2 border-black">
+                <span>POKE: <span id="poke-score">0</span></span>
+                <button onclick="exitGame()" class="bg-black text-white px-4 py-1 border-2 border-white hover:bg-red-700">EXIT</button>
+                <span>USER: <span id="user-score">0</span></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        let currentGame = null;
+        let animationId = null;
+        let scores = { user: 0, poke: 0 };
+
+        // Audio Engine
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(freq, type, duration, vol = 0.1) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function triggerHaptic() {
+            if (navigator.vibrate) navigator.vibrate(15);
+        }
+
+        function startGame(mode) {
+            document.getElementById('lobby').classList.add('hidden');
+            document.getElementById('game-container').classList.remove('hidden');
+            currentGame = mode;
+            resize();
+            initGame();
+            loop();
+        }
+
+        function exitGame() {
+            cancelAnimationFrame(animationId);
+            document.getElementById('game-container').classList.add('hidden');
+            document.getElementById('lobby').classList.remove('hidden');
+            scores = { user: 0, poke: 0 };
+            updateScores();
+        }
+
+        function updateScores() {
+            document.getElementById('user-score').innerText = scores.user;
+            document.getElementById('poke-score').innerText = scores.poke;
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+
+        // Physics State
+        let ball, userPaddle, pokePaddle, puck, userMallet, pokeMallet, coins = [];
+        let touchX = 0, touchY = 0, isTouching = false;
+
+        function initGame() {
+            if (currentGame === 'pong') {
+                ball = { x: canvas.width/2, y: canvas.height/2, vx: 5, vy: 5, r: 10 };
+                userPaddle = { x: canvas.width/2 - 50, y: canvas.height - 40, w: 100, h: 20 };
+                pokePaddle = { x: canvas.width/2 - 50, y: 20, w: 100, h: 20 };
+            } else if (currentGame === 'hockey') {
+                puck = { x: canvas.width/2, y: canvas.height/2, vx: 0, vy: 0, r: 20, friction: 0.98 };
+                userMallet = { x: canvas.width/2, y: canvas.height * 0.8, r: 35 };
+                pokeMallet = { x: canvas.width/2, y: canvas.height * 0.2, r: 35 };
+            } else if (currentGame === 'carrom') {
+                coins = [];
+                const centerX = canvas.width/2;
+                const centerY = canvas.height/2;
+                // Queen
+                coins.push({ x: centerX, y: centerY, r: 15, color: '#D4AF37', type: 'queen', vx: 0, vy: 0 });
+                // Simple circle of coins
+                for(let i=0; i<6; i++) {
+                    const ang = (i / 6) * Math.PI * 2;
+                    coins.push({ x: centerX + Math.cos(ang)*40, y: centerY + Math.sin(ang)*40, r: 15, color: i%2===0 ? '#000' : '#B22222', type: 'coin', vx: 0, vy: 0 });
+                }
+                userMallet = { x: canvas.width/2, y: canvas.height * 0.85, r: 25, active: false };
+            }
+        }
+
+        canvas.addEventListener('touchstart', (e) => {
+            isTouching = true;
+            touchX = e.touches[0].clientX;
+            touchY = e.touches[0].clientY;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            touchX = e.touches[0].clientX;
+            touchY = e.touches[0].clientY;
+            if (currentGame === 'pong') {
+                userPaddle.x = touchX - userPaddle.w / 2;
+            } else if (currentGame === 'hockey') {
+                userMallet.x = touchX;
+                userMallet.y = Math.max(canvas.height/2 + userMallet.r, touchY);
+            }
+        });
+
+        canvas.addEventListener('touchend', () => isTouching = false);
+
+        function loop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (currentGame === 'pong') updatePong();
+            else if (currentGame === 'hockey') updateHockey();
+            else if (currentGame === 'carrom') updateCarrom();
+
+            animationId = requestAnimationFrame(loop);
+        }
+
+        function updatePong() {
+            // Draw
+            ctx.fillStyle = '#000';
+            ctx.fillRect(userPaddle.x, userPaddle.y, userPaddle.w, userPaddle.h);
+            ctx.fillRect(pokePaddle.x, pokePaddle.y, pokePaddle.w, pokePaddle.h);
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
+            ctx.fill();
+
+            // Logic
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+
+            // Walls
+            if (ball.x < 0 || ball.x > canvas.width) {
+                ball.vx *= -1;
+                playSound(200, 'square', 0.1);
+            }
+
+            // AI (Poke)
+            const aiSpeed = 4.5;
+            if (pokePaddle.x + pokePaddle.w/2 < ball.x) pokePaddle.x += aiSpeed;
+            else pokePaddle.x -= aiSpeed;
+
+            // Collision
+            if (ball.y + ball.r > userPaddle.y && ball.x > userPaddle.x && ball.x < userPaddle.x + userPaddle.w) {
+                ball.vy *= -1.05;
+                ball.y = userPaddle.y - ball.r;
+                playSound(150, 'sine', 0.15);
+                triggerHaptic();
+            }
+            if (ball.y - ball.r < pokePaddle.y + pokePaddle.h && ball.x > pokePaddle.x && ball.x < pokePaddle.x + pokePaddle.w) {
+                ball.vy *= -1.05;
+                ball.y = pokePaddle.y + pokePaddle.h + ball.r;
+                playSound(150, 'sine', 0.15);
+            }
+
+            // Score
+            if (ball.y < 0) { scores.user++; resetBall(); }
+            if (ball.y > canvas.height) { scores.poke++; resetBall(); }
+        }
+
+        function resetBall() {
+            ball.x = canvas.width/2;
+            ball.y = canvas.height/2;
+            ball.vx = 5 * (Math.random() > 0.5 ? 1 : -1);
+            ball.vy = 5;
+            updateScores();
+            playSound(100, 'sawtooth', 0.5);
+        }
+
+        function updateHockey() {
+            // Logic puck
+            puck.x += puck.vx;
+            puck.y += puck.vy;
+            puck.vx *= puck.friction;
+            puck.vy *= puck.friction;
+
+            // Walls
+            if (puck.x < puck.r || puck.x > canvas.width - puck.r) puck.vx *= -1;
+            if (puck.y < puck.r || puck.y > canvas.height - puck.r) {
+                if (puck.x > canvas.width * 0.3 && puck.x < canvas.width * 0.7) {
+                    if (puck.y < canvas.height/2) scores.user++; else scores.poke++;
+                    puck.x = canvas.width/2; puck.y = canvas.height/2; puck.vx = 0; puck.vy = 0;
+                    updateScores();
+                    playSound(80, 'sawtooth', 0.8, 0.2);
+                } else {
+                    puck.vy *= -1;
+                }
+            }
+
+            // AI Poke
+            pokeMallet.x += (puck.x - pokeMallet.x) * 0.1;
+            pokeMallet.y += (Math.min(canvas.height*0.2, puck.y - 100) - pokeMallet.y) * 0.1;
+
+            // Collision mallets
+            [userMallet, pokeMallet].forEach(m => {
+                const dx = puck.x - m.x;
+                const dy = puck.y - m.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < puck.r + m.r) {
+                    const angle = Math.atan2(dy, dx);
+                    puck.vx = Math.cos(angle) * 15;
+                    puck.vy = Math.sin(angle) * 15;
+                    playSound(300, 'triangle', 0.1);
+                    if (m === userMallet) triggerHaptic();
+                }
+            });
+
+            // Draw
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 10;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+            // Goals
+            ctx.fillStyle = '#D4AF37';
+            ctx.fillRect(canvas.width*0.3, 0, canvas.width*0.4, 10);
+            ctx.fillRect(canvas.width*0.3, canvas.height-10, canvas.width*0.4, 10);
+            
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#B22222';
+            ctx.beginPath(); ctx.arc(userMallet.x, userMallet.y, userMallet.r, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#D4AF37';
+            ctx.beginPath(); ctx.arc(pokeMallet.x, pokeMallet.y, pokeMallet.r, 0, Math.PI*2); ctx.fill();
+        }
+
+        function updateCarrom() {
+            // Simplified Carrom Logic
+            coins.forEach(c => {
+                c.x += c.vx; c.y += c.vy;
+                c.vx *= 0.98; c.vy *= 0.98;
+                // Pocket check
+                if ((c.x < 30 || c.x > canvas.width-30) && (c.y < 30 || c.y > canvas.height-30)) {
+                    if (c.color === '#B22222') scores.user += 10;
+                    else if (c.color === '#000') scores.poke += 10;
+                    else if (c.type === 'queen') scores.user += 50;
+                    c.x = -1000; c.vx = 0; c.vy = 0;
+                    updateScores();
+                    playSound(400, 'sine', 0.3);
+                }
+            });
+
+            // Draw Board
+            ctx.fillStyle = '#F5F5F5';
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000';
+            // Pockets
+            [ [0,0], [canvas.width,0], [0,canvas.height], [canvas.width,canvas.height] ].forEach(p => {
+                ctx.beginPath(); ctx.arc(p[0], p[1], 40, 0, Math.PI*2); ctx.fill();
+            });
+
+            coins.forEach(c => {
+                ctx.fillStyle = c.color;
+                ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = '#000'; ctx.stroke();
+            });
+
+            // Striker
+            ctx.fillStyle = '#D4AF37';
+            ctx.beginPath(); ctx.arc(userMallet.x, userMallet.y, userMallet.r, 0, Math.PI*2); ctx.fill();
+        }
+
+    </script>
+</body>
 </html>
