@@ -107,9 +107,9 @@ export default function App() {
       playSound('click');
     }
     setTelemetry({
-      target: \`\${Math.round(b.x)}, \${Math.round(b.y)}\`,
-      latency: \`\${Math.round(Math.random() * 5 + 2)}ms\`,
-      motor: \`\${Math.round(Math.abs(state.p2.x - aiTarget) / 10)}%\`,
+      target: `${Math.round(b.x)}, ${Math.round(b.y)}`,
+      latency: `${Math.round(Math.random() * 5 + 2)}ms`,
+      motor: `${Math.round(Math.abs(state.p2.x - aiTarget) / 10)}%`,
       thought: b.vy < 0 ? "Tracking ball trajectory..." : "Positioning for return...",
     });
   };
@@ -230,7 +230,7 @@ export default function App() {
           <h2 className="text-4xl font-black italic tracking-tighter text-[#FF0000]">POKE_MOTION</h2>
           <div className="flex flex-col gap-4 w-64">
             {Object.values(GAMES).map(game => (
-              <button key={game} onClick={() => { setCurrentGame(game); setIsMenuOpen(false); handleInteraction(); }} className={`p-4 border text-left uppercase font-bold tracking-widest \${currentGame === game ? 'bg-[#F5F5F5] text-black' : 'border-[#F5F5F5] hover:bg-white/10'}`}>
+              <button key={game} onClick={() => { setCurrentGame(game); setIsMenuOpen(false); handleInteraction(); }} className={`p-4 border text-left uppercase font-bold tracking-widest ${currentGame === game ? 'bg-[#F5F5F5] text-black' : 'border-[#F5F5F5] hover:bg-white/10'}`}>
                 {game}
               </button>
             ))}
