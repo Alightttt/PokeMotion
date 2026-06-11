@@ -20,6 +20,9 @@ const useAudio = () => {
     if (!audioCtx.current) {
       audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
     }
+    if (audioCtx.current.state === 'suspended') {
+      audioCtx.current.resume();
+    }
   };
   const playSound = (type) => {
     initAudio();
@@ -55,7 +58,7 @@ const useAudio = () => {
       osc.stop(now + 0.5);
     }
   };
-  return { playSound };
+  return { playSound, initAudio };
 };
 
 export default function App() {
@@ -63,7 +66,8 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [telemetry, setTelemetry] = useState({ target: '0, 0', latency: '0ms', motor: '0%', thought: 'Initializing...' });
   const canvasRef = useRef(null);
-  const { playSound } = useAudio();
+  const frameId = useRef(null);
+  const { playSound, initAudio } = useAudio();
   const gameState = useRef({
     ball: { x: 400, y: 300, vx: 5, vy: 5, radius: 10, spin: 0 },
     p1: { x: 400, y: 550, w: 100, h: 15, score: 0 },
@@ -132,6 +136,9 @@ export default function App() {
        playSound('click');
     }
     state.p2.x += (b.x - state.p2.x) * 0.1;
+    state.p2.y += (b.y - state.p2.y) * 0.1;
+    if (state.p2.y > 250) state.p2.y = 250;
+    if (state.p2.y < 50) state.p2.y = 50;
     const distP2 = Math.hypot(b.x - state.p2.x, b.y - state.p2.y);
     if (distP2 < 40) {
         b.vx = (b.x - state.p2.x) * 0.5;
@@ -171,11 +178,11 @@ export default function App() {
       ctx.fillText(gameState.current.p2.score, 20, 280);
       ctx.fillText(gameState.current.p1.score, 20, 330);
     }
-    requestAnimationFrame(loop);
+    frameId.current = requestAnimationFrame(loop);
   };
 
   useEffect(() => {
-    requestAnimationFrame(loop);
+    frameId.current = requestAnimationFrame(loop);
     const handleMove = (e) => {
       const rect = canvasRef.current.getBoundingClientRect();
       const x = (e.clientX || e.touches?.[0]?.clientX) - rect.left;
@@ -185,13 +192,22 @@ export default function App() {
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('touchmove', handleMove, { passive: false });
     return () => {
+      cancelAnimationFrame(frameId.current);
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('touchmove', handleMove);
     };
   }, [currentGame]);
 
+  const handleInteraction = () => {
+    initAudio();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black text-[#F5F5F5] font-mono overflow-hidden select-none" style={{ height: '100dvh' }}>
+    <div 
+      className="fixed inset-0 bg-black text-[#F5F5F5] font-mono overflow-hidden select-none" 
+      style={{ height: '100dvh' }}
+      onClick={handleInteraction}
+    >
       <div className="absolute top-4 left-4 z-10 pointer-events-none">
         <div className="text-[10px] text-[#D4AF37] uppercase tracking-widest mb-1 flex items-center gap-2">
           <Cpu size={12} /> Poke_Neural_Link
@@ -206,7 +222,7 @@ export default function App() {
       <div className="w-full h-full flex items-center justify-center">
         <canvas ref={canvasRef} width={800} height={600} className="w-full h-full object-contain border-0" style={{ imageRendering: 'pixelated' }} />
       </div>
-      <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="absolute top-4 right-4 z-50 p-2 bg-black border border-[#F5F5F5] hover:bg-[#F5F5F5] hover:text-black transition-colors">
+      <button onClick={() => { setIsMenuOpen(!isMenuOpen); handleInteraction(); }} className="absolute top-4 right-4 z-50 p-2 bg-black border border-[#F5F5F5] hover:bg-[#F5F5F5] hover:text-black transition-colors">
         {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
       {isMenuOpen && (
@@ -214,7 +230,7 @@ export default function App() {
           <h2 className="text-4xl font-black italic tracking-tighter text-[#FF0000]">POKE_MOTION</h2>
           <div className="flex flex-col gap-4 w-64">
             {Object.values(GAMES).map(game => (
-              <button key={game} onClick={() => { setCurrentGame(game); setIsMenuOpen(false); }} className={`p-4 border text-left uppercase font-bold tracking-widest \${currentGame === game ? 'bg-[#F5F5F5] text-black' : 'border-[#F5F5F5] hover:bg-white/10'}`}>
+              <button key={game} onClick={() => { setCurrentGame(game); setIsMenuOpen(false); handleInteraction(); }} className={`p-4 border text-left uppercase font-bold tracking-widest \${currentGame === game ? 'bg-[#F5F5F5] text-black' : 'border-[#F5F5F5] hover:bg-white/10'}`}>
                 {game}
               </button>
             ))}
