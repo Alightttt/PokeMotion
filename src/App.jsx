@@ -41,6 +41,46 @@ export default function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Audio Routing Logic: Toggle between earpiece and loudspeaker
+  const updateAudioOutput = useCallback(async (useSpeaker) => {
+    if (!ttsAudioRef.current || !navigator.mediaDevices.enumerateDevices) return;
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioOutputs = devices.filter(device => device.kind === 'audiooutput');
+      
+      // Heuristic: Earpiece/Receiver usually doesn't have "speaker" in label or is default
+      // Speakerphone usually has "speaker" or "loudspeaker"
+      let targetDevice;
+      if (useSpeaker) {
+        targetDevice = audioOutputs.find(d => 
+          d.label.toLowerCase().includes('speaker') || 
+          d.label.toLowerCase().includes('loudspeaker')
+        );
+      } else {
+        targetDevice = audioOutputs.find(d => 
+          d.label.toLowerCase().includes('receiver') || 
+          d.label.toLowerCase().includes('earpiece') ||
+          d.label.toLowerCase().includes('phone') ||
+          d.label === '' // Often the case on mobile Chrome for internal receiver
+        );
+      }
+
+      if (targetDevice && ttsAudioRef.current.setSinkId) {
+        await ttsAudioRef.current.setSinkId(targetDevice.deviceId);
+        console.log(`Audio routed to: ${targetDevice.label || (useSpeaker ? 'Speaker' : 'Earpiece')}`);
+      }
+    } catch (err) {
+      console.warn("Audio routing failed, falling back to system default:", err);
+    }
+  }, []);
+
+  const toggleSpeaker = () => {
+    const newState = !speakerOn;
+    setSpeakerOn(newState);
+    updateAudioOutput(newState);
+  };
+
   const getLordPokeResponse = async (userText) => {
     if (processingRef.current) return;
     processingRef.current = true;
@@ -94,6 +134,9 @@ ${userText}<|im_end|>
       const url = URL.createObjectURL(blob);
       ttsAudioRef.current.src = url;
       setTranscript(`Lord Poke: ${text}`);
+      
+      // Ensure current routing is applied before playback
+      await updateAudioOutput(speakerOn);
       await ttsAudioRef.current.play();
     } catch (err) {
       const utterance = new SpeechSynthesisUtterance(text);
@@ -191,7 +234,13 @@ ${userText}<|im_end|>
       setErrorMessage('');
       audioCleanupRef.current = audioEngine.playDialTone();
       
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
       localStreamRef.current = stream;
 
       setTimeout(() => {
@@ -222,7 +271,13 @@ ${userText}<|im_end|>
   const acceptCall = async () => {
     stopTone();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
       localStreamRef.current = stream;
       setCallState('ACTIVE');
       setCallTimer(0);
@@ -365,7 +420,7 @@ ${userText}<|im_end|>
               <div className="grid grid-cols-3 gap-x-8 gap-y-12 w-full animate-in zoom-in-95 duration-1000 delay-200 ease-out">
                 <IconButton icon={micMuted ? MicOff : Mic} label="mute" action={toggleMute} active={micMuted} />
                 <IconButton icon={Grid} label="keypad" disabled />
-                <IconButton icon={Volume2} label="speaker" action={() => setSpeakerOn(!speakerOn)} active={speakerOn} />
+                <IconButton icon={Volume2} label="speaker" action={toggleSpeaker} active={speakerOn} />
                 <IconButton icon={Plus} label="add call" disabled />
                 <IconButton icon={Video} label="FaceTime" disabled />
                 <IconButton icon={Info} label="info" disabled />
