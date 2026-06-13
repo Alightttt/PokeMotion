@@ -32,6 +32,7 @@ export default function App() {
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const audioCleanupRef = useRef(null);
+  const hasAutoDialed = useRef(false);
 
   // Initialize PeerJS
   useEffect(() => {
@@ -51,6 +52,22 @@ export default function App() {
       peer.destroy();
     };
   }, []);
+
+  // Parse Query Params and Handle Auto-dial
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const target = urlParams.get('target');
+    const autodial = urlParams.get('autodial') === 'true';
+
+    if (target) {
+      setTargetId(target);
+    }
+
+    if ((target || autodial) && peerId && !hasAutoDialed.current) {
+      hasAutoDialed.current = true;
+      startCall(target);
+    }
+  }, [peerId]);
 
   // Call duration timer
   useEffect(() => {
@@ -76,8 +93,10 @@ export default function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const startCall = async () => {
-    if (!targetId) return;
+  const startCall = async (overrideTarget) => {
+    const actualTarget = overrideTarget || targetId;
+    if (!actualTarget) return;
+    
     audioEngine.init();
     setCallState('DIALING');
     audioCleanupRef.current = audioEngine.playDialTone() || null;
@@ -86,7 +105,7 @@ export default function App() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
-      const call = peerRef.current.call(targetId, stream);
+      const call = peerRef.current.call(actualTarget, stream);
       setupCall(call);
     } catch (err) {
       console.error(err);
@@ -200,7 +219,7 @@ export default function App() {
 
             <button 
               disabled={!targetId}
-              onClick={startCall}
+              onClick={() => startCall()}
               className="w-full bg-[#D4AF37] text-black py-5 font-black flex items-center justify-center gap-3 disabled:opacity-30 active:scale-[0.98] transition-transform"
             >
               <Radio size={24} /> INITIATE_UPLINK
