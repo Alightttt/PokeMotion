@@ -27,6 +27,7 @@ export default function App() {
   const ttsAudioRef = useRef(new Audio());
   const timerRef = useRef(null);
   const recognitionRef = useRef(null);
+  const processingRef = useRef(false);
   
   const isLordPoke = new URLSearchParams(window.location.search).get('station') === '001';
 
@@ -78,34 +79,47 @@ export default function App() {
     recognitionRef.current.interimResults = false;
     
     recognitionRef.current.onresult = (event) => {
+      if (processingRef.current) return;
       const text = event.results[event.results.length - 1][0].transcript;
-      if (isLordPoke) getLordPokeResponse(text);
+      if (isLordPoke && text.trim().length > 0) {
+        getLordPokeResponse(text.trim());
+      }
     };
 
     recognitionRef.current.onend = () => {
-      if (callState === 'ACTIVE') recognitionRef.current.start();
+      if (callState === 'ACTIVE') {
+        try {
+          recognitionRef.current.start();
+        } catch(e) {}
+      }
     };
 
     recognitionRef.current.start();
   };
 
   const getLordPokeResponse = async (userText) => {
+    if (processingRef.current) return;
+    processingRef.current = true;
     setIsProcessing(true);
     setTranscript(`User: ${userText}`);
+    
     try {
       const response = await fetch(LLM_API, {
         headers: HF_TOKEN ? { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify({ 
-          inputs: `<|im_start|>system\nYou are Lord Poke, a powerful, blunt, and slightly arrogant AI overlord. Keep responses short, punchy, and commanding.<|im_end|>\n<|im_start|>user\n${userText}<|im_end|>\n<|im_start|>assistant\n`,
-          parameters: { max_new_tokens: 50, stop: ["<|im_end|>"] }
+          inputs: `<|im_start|>system\nYou are Lord Poke, a powerful, blunt, and slightly arrogant AI overlord. You speak in fast, snappy Hinglish. Your tone is commanding but natural. Keep responses short, direct, and witty. No system-speak.<|im_end|>\n<|im_start|>user\n${userText}<|im_end|>\n<|im_start|>assistant\n`,
+          parameters: { max_new_tokens: 60, stop: ["<|im_end|>", "\n"] }
         }),
       });
       const result = await response.json();
-      const aiText = result[0]?.generated_text?.split('assistant\n')[1] || "Silence, human.";
-      speak(aiText.trim());
+      const aiText = result[0]?.generated_text?.split('assistant\n')[1] || "Haan, kya hai?";
+      await speak(aiText.trim());
     } catch (err) {
-      speak("Explain yourself, mortal.");
+      await speak("Net slow hai, fir se bol.");
+    } finally {
+      processingRef.current = false;
+      setIsProcessing(false);
     }
   };
 
@@ -117,14 +131,15 @@ export default function App() {
         body: JSON.stringify({ inputs: text }),
       });
       const blob = await response.blob();
-      ttsAudioRef.current.src = URL.createObjectURL(blob);
-      ttsAudioRef.current.play();
+      const url = URL.createObjectURL(blob);
+      ttsAudioRef.current.src = url;
       setTranscript(`Lord Poke: ${text}`);
+      await ttsAudioRef.current.play();
     } catch (err) {
       const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'hi-IN';
       window.speechSynthesis.speak(utterance);
-    } finally {
-      setIsProcessing(false);
+      setTranscript(`Lord Poke: ${text}`);
     }
   };
 
@@ -140,7 +155,7 @@ export default function App() {
       setCallTimer(0);
       timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
       initSTT();
-      if (isLordPoke) speak("Uplink synchronized. Speak.");
+      if (isLordPoke) speak("Haan, Lord Poke bol raha hoon. Bolo.");
     });
     call.on('close', endCall);
   };
@@ -165,6 +180,7 @@ export default function App() {
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     recognitionRef.current?.stop();
     clearInterval(timerRef.current);
+    processingRef.current = false;
     setCallState('IDLE');
     setCallTimer(0);
     setTranscript('');
