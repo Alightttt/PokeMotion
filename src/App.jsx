@@ -55,47 +55,68 @@ export default function App() {
       });
     }
 
-    const peer = new Peer(isLordPoke ? 'LORD_POKE_STATION_001' : undefined);
-    peerRef.current = peer;
+    const initPeer = () => {
+      const peer = new Peer(isLordPoke ? 'LORD_POKE_STATION_001' : undefined);
+      peerRef.current = peer;
 
-    peer.on('open', (id) => {
-      setPeerId(id);
-      setErrorMessage('');
-    });
-    
-    peer.on('error', (err) => {
-      console.error("PeerJS Error:", err.type, err);
-      if (err.type === 'unavailable-id') {
-        setErrorMessage("Connection ID is already in use. Retrying...");
-      } else {
-        setErrorMessage(`Connection Error: ${err.type}`);
-      }
-    });
+      peer.on('open', (id) => {
+        setPeerId(id);
+        setErrorMessage('');
+      });
 
-    peer.on('call', (incomingCall) => {
-      if (isLordPoke) {
-        incomingCall.on('stream', (remoteStream) => {
-           setupCall(incomingCall, remoteStream);
-        });
-        
-        if (localStreamRef.current) {
-          incomingCall.answer(localStreamRef.current);
+      peer.on('disconnected', () => {
+        console.log("Peer disconnected, attempting to reconnect...");
+        peer.reconnect();
+      });
+      
+      peer.on('error', (err) => {
+        console.error("PeerJS Error:", err.type, err);
+        if (err.type === 'unavailable-id') {
+          setErrorMessage("Connection ID is already in use.");
+        } else if (err.type === 'peer-unavailable') {
+           setErrorMessage("Station is currently offline.");
+           endCall();
         } else {
-          navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            localStreamRef.current = stream;
-            incomingCall.answer(stream);
-          });
+          setErrorMessage(`Connection Error: ${err.type}`);
         }
-      } else {
-        setCallState('INCOMING');
-        callRef.current = incomingCall;
-        stopTone();
-        audioCleanupRef.current = audioEngine.playRingTone();
-      }
-    });
+      });
+
+      peer.on('call', (incomingCall) => {
+        // Robust Station Answering Logic
+        if (isLordPoke) {
+          incomingCall.on('stream', (remoteStream) => {
+             setupCall(incomingCall, remoteStream);
+          });
+          incomingCall.on('close', endCall);
+          incomingCall.on('error', (err) => {
+            console.error("Incoming call error:", err);
+            endCall();
+          });
+
+          if (localStreamRef.current) {
+            incomingCall.answer(localStreamRef.current);
+          } else {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+              localStreamRef.current = stream;
+              incomingCall.answer(stream);
+            });
+          }
+        } else {
+          // Client side handling
+          setCallState('INCOMING');
+          callRef.current = incomingCall;
+          incomingCall.on('close', endCall);
+          incomingCall.on('error', endCall);
+          stopTone();
+          audioCleanupRef.current = audioEngine.playRingTone();
+        }
+      });
+    };
+
+    initPeer();
 
     return () => {
-      peer.destroy();
+      peerRef.current?.destroy();
       clearInterval(timerRef.current);
     };
   }, [isLordPoke]);
@@ -178,7 +199,7 @@ export default function App() {
     stopTone();
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = stream;
-      remoteAudioRef.current.play();
+      remoteAudioRef.current.play().catch(e => console.error("Audio play failed:", e));
     }
     setCallState('ACTIVE');
     setCallTimer(0);
@@ -186,24 +207,27 @@ export default function App() {
     timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
     initSTT();
     if (isLordPoke) speak("Haan, Lord Poke bol raha hoon. Bolo.");
-
-    call.on('close', endCall);
-    call.on('error', endCall);
   };
 
   const startCall = async () => {
     audioEngine.init();
     setCallState('DIALING');
+    setErrorMessage('');
     audioCleanupRef.current = audioEngine.playDialTone();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
       const call = peerRef.current.call('LORD_POKE_STATION_001', stream);
+      callRef.current = call;
       
       call.on('stream', (remoteStream) => {
         setupCall(call, remoteStream);
       });
-      call.on('error', endCall);
+      call.on('close', endCall);
+      call.on('error', (err) => {
+        console.error("Outbound call error:", err);
+        endCall();
+      });
     } catch (err) {
       console.error("Start call error:", err);
       endCall();
@@ -211,6 +235,7 @@ export default function App() {
   };
 
   const answerCall = async () => {
+     if (!callRef.current) return;
      try {
        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
        localStreamRef.current = stream;
@@ -219,16 +244,41 @@ export default function App() {
        });
        callRef.current.answer(stream);
      } catch(err) {
+       console.error("Answer call error:", err);
        endCall();
      }
   };
 
   const endCall = () => {
     stopTone();
-    callRef.current?.close();
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(t => t.stop());
+    
+    // Fully clean up PeerJS call objects and RTCPeerConnection
+    if (callRef.current) {
+      callRef.current.close();
+      if (callRef.current.peerConnection) {
+        callRef.current.peerConnection.close();
+      }
+      callRef.current = null;
     }
+
+    // Stop and nullify local stream tracks
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => {
+        t.stop();
+        localStreamRef.current.removeTrack(t);
+      });
+      localStreamRef.current = null;
+    }
+
+    // Stop and nullify remote audio
+    if (remoteAudioRef.current) {
+      const stream = remoteAudioRef.current.srcObject;
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+      remoteAudioRef.current.srcObject = null;
+    }
+
     recognitionRef.current?.stop();
     clearInterval(timerRef.current);
     processingRef.current = false;
@@ -279,7 +329,7 @@ export default function App() {
         </div>
 
         {errorMessage && (
-           <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-2xl text-red-400 text-xs animate-bounce">
+           <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-2xl text-red-400 text-[10px] animate-pulse">
              {errorMessage}
            </div>
         )}
