@@ -4,22 +4,43 @@
 
 :root {
   background-color: #000000;
-  color: #F5F5F5;
+  color: #ffffff;
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: 'JetBrains Mono', monospace;
+  /* Use system font stack for authentic Apple feel */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
   overflow: hidden;
   background: #000;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Remove brutalist constraints to allow premium rounded corners and glass effects */
 * {
-  border-radius: 0px !important;
-  box-shadow: none !important;
+  border-radius: initial;
+  box-shadow: initial;
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Custom utility for the intense Apple glass effect */
+.glass-morphism {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Smooth scaling for Apple interactions */
+.active-scale {
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.active-scale:active {
+  transform: scale(0.92);
 }
