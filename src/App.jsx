@@ -1,5 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Menu, X, Cpu, Activity, MessageSquare } from "lucide-react";
+import Peer from 'peerjs';
+import WebApp from '@twa-dev/sdk';
+import { 
+  Phone, PhoneOff, Mic, MicOff, Zap, Activity, 
+  Cpu, Monitor, ShieldCheck, Wifi, SignalHigh, Radio
+} from "lucide-react";
+import { audioEngine } from './AudioEngine';
 
 const COLORS = {
   BLACK: "#000000",
@@ -8,111 +14,268 @@ const COLORS = {
   RED: "#FF0000",
 };
 
-const TAUNTS = [
-  "Easiest point of my life.",
-  "Lagging much?",
-  "My AI is sleeping and still winning.",
-  "Is that your best move?",
-  "Calculated.",
-  "Too slow, human."
-];
-
 export default function App() {
-  const [gameStarted, setGameStarted] = useState(false);
-  const [telemetry, setTelemetry] = useState({ rage: "LOW", spin: "0.00", engine: "0%" });
-  const [taunt, setTaunt] = useState("System ready.");
-  const canvasRef = useRef(null);
-  
-  const gameState = useRef({
-    ball: { x: 400, y: 300, vx: 5, vy: 5, radius: 10 },
-    p1: { x: 400, y: 550, w: 100, h: 15, score: 0 },
-    p2: { x: 400, y: 50, w: 100, h: 15, score: 0 },
-    mouse: { x: 400, y: 550 },
-    aiDelay: 150,
+  const [peerId, setPeerId] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [callState, setCallState] = useState('IDLE'); // IDLE, DIALING, INCOMING, ACTIVE, ENDED
+  const [duration, setDuration] = useState(0);
+  const [micEnabled, setMicEnabled] = useState(true);
+  const [telemetry, setTelemetry] = useState({ 
+    latency: "0ms", 
+    encryption: "AES-P2P", 
+    buffer: "1024KB",
+    engine: "98%"
   });
+  
+  const peerRef = useRef(null);
+  const callRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const remoteAudioRef = useRef(null);
+  const audioCleanupRef = useRef(null);
 
-  const resetBall = () => {
-    gameState.current.ball = { x: 400, y: 300, vx: 5 * (Math.random() > 0.5 ? 1 : -1), vy: 5, radius: 10 };
-    if (Math.random() > 0.7) setTaunt(TAUNTS[Math.floor(Math.random() * TAUNTS.length)]);
-  };
+  // Initialize PeerJS
+  useEffect(() => {
+    const peer = new Peer();
+    peerRef.current = peer;
 
-  const update = useCallback(() => {
-    const state = gameState.current;
-    const b = state.ball;
-    b.x += b.vx;
-    b.y += b.vy;
-
-    if (b.x - b.radius < 0 || b.x + b.radius > 800) b.vx *= -1;
-    if (b.y < 0) { state.p1.score++; resetBall(); }
-    if (b.y > 600) { state.p2.score++; resetBall(); }
-
-    state.p1.x = state.mouse.x;
-    if (b.y + b.radius > state.p1.y && b.y < state.p1.y + state.p1.h && b.x > state.p1.x - state.p1.w/2 && b.x < state.p1.x + state.p1.w/2) {
-      b.vy = -Math.abs(b.vy);
-    }
-
-    setTimeout(() => {
-      const target = b.x;
-      const dx = target - state.p2.x;
-      const speed = 6;
-      state.p2.x += Math.max(-speed, Math.min(speed, dx));
-      state.p2.x = Math.max(state.p2.w/2, Math.min(800 - state.p2.w/2, state.p2.x));
-
-      if (b.y - b.radius < state.p2.y + state.p2.h && b.y > state.p2.y && b.x > state.p2.x - state.p2.w/2 && b.x < state.p2.x + state.p2.w/2) {
-        b.vy = Math.abs(b.vy);
-      }
-    }, state.aiDelay);
-
-    setTelemetry({
-      rage: state.p1.score < state.p2.score ? "HIGH" : "LOW",
-      spin: Math.abs(b.vx).toFixed(2),
-      engine: (Math.random() * 100).toFixed(0) + "%"
+    peer.on('open', (id) => setPeerId(id));
+    
+    peer.on('call', (incomingCall) => {
+      setCallState('INCOMING');
+      callRef.current = incomingCall;
+      audioCleanupRef.current = audioEngine.playRingTone() || null;
+      WebApp.HapticFeedback.notificationOccurred('warning');
     });
+
+    return () => {
+      peer.destroy();
+    };
   }, []);
 
-  const loop = useCallback(() => {
-    if (!gameStarted) return;
-    update();
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = COLORS.BLACK;
-    ctx.fillRect(0, 0, 800, 600);
-    ctx.fillStyle = COLORS.WHITE;
-    ctx.beginPath(); ctx.arc(gameState.current.ball.x, gameState.current.ball.y, 10, 0, Math.PI*2); ctx.fill();
-    ctx.fillRect(gameState.current.p1.x - 50, gameState.current.p1.y, 100, 15);
-    ctx.fillRect(gameState.current.p2.x - 50, gameState.current.p2.y, 100, 15);
-    requestAnimationFrame(loop);
-  }, [gameStarted, update]);
-
+  // Call duration timer
   useEffect(() => {
-    requestAnimationFrame(loop);
-    const handleMove = (e) => {
-        const rect = canvasRef.current.getBoundingClientRect();
-        gameState.current.mouse.x = e.clientX - rect.left;
-    };
-    window.addEventListener("mousemove", handleMove);
-    return () => window.removeEventListener("mousemove", handleMove);
-  }, [loop]);
+    let interval;
+    if (callState === 'ACTIVE') {
+      interval = setInterval(() => {
+        setDuration(d => d + 1);
+        setTelemetry(prev => ({
+            ...prev,
+            latency: Math.floor(Math.random() * 20 + 30) + "ms",
+            engine: Math.floor(Math.random() * 5 + 95) + "%"
+        }));
+      }, 1000);
+    } else {
+      setDuration(0);
+    }
+    return () => clearInterval(interval);
+  }, [callState]);
+
+  const formatDuration = (s) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const startCall = async () => {
+    if (!targetId) return;
+    audioEngine.init();
+    setCallState('DIALING');
+    audioCleanupRef.current = audioEngine.playDialTone() || null;
+    WebApp.HapticFeedback.impactOccurred('medium');
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+      const call = peerRef.current.call(targetId, stream);
+      setupCall(call);
+    } catch (err) {
+      console.error(err);
+      setCallState('IDLE');
+    }
+  };
+
+  const answerCall = async () => {
+    if (audioCleanupRef.current) audioCleanupRef.current();
+    audioEngine.init();
+    WebApp.HapticFeedback.impactOccurred('heavy');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = stream;
+      callRef.current.answer(stream);
+      setupCall(callRef.current);
+    } catch (err) {
+      console.error(err);
+      setCallState('IDLE');
+    }
+  };
+
+  const setupCall = (call) => {
+    callRef.current = call;
+    call.on('stream', (remoteStream) => {
+      if (audioCleanupRef.current) audioCleanupRef.current();
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream;
+        remoteAudioRef.current.play();
+      }
+      setCallState('ACTIVE');
+    });
+    call.on('close', endCall);
+    call.on('error', endCall);
+  };
+
+  const endCall = () => {
+    if (audioCleanupRef.current) audioCleanupRef.current();
+    callRef.current?.close();
+    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    setCallState('ENDED');
+    WebApp.HapticFeedback.notificationOccurred('error');
+    setTimeout(() => setCallState('IDLE'), 2000);
+  };
+
+  const toggleMic = () => {
+    if (localStreamRef.current) {
+      const enabled = !micEnabled;
+      localStreamRef.current.getAudioTracks()[0].enabled = enabled;
+      setMicEnabled(enabled);
+      WebApp.HapticFeedback.selectionChanged();
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black text-white font-mono p-4">
-      <div className="absolute top-4 left-4 border border-[#D4AF37] p-4 bg-black/80">
-        <h2 className="text-[#D4AF37] font-black text-xl mb-2">LORD POKE HUD</h2>
-        <div className="text-[12px] space-y-2">
-            <div>RAGE LEVEL: {telemetry.rage}</div>
-            <div>CALCULATED SPIN: {telemetry.spin}</div>
-            <div>INSULT ENGINE LOAD: {telemetry.engine}</div>
+    <div className="fixed inset-0 bg-black text-white font-mono p-4 flex flex-col touch-none border-[12px] border-black">
+      
+      {/* HUD Header - Lord Poke Style */}
+      <div className="flex justify-between items-start mb-4">
+        <div className="border border-[#D4AF37] p-3 bg-black/80">
+          <h2 className="text-[#D4AF37] font-black text-lg mb-1 leading-none tracking-tighter">LORD POKE VOICE</h2>
+          <div className="text-[9px] space-y-1 opacity-80">
+            <div className="flex items-center gap-1"><SignalHigh size={10} /> LINK: {peerId ? 'STABLE' : 'ESTABLISHING...'}</div>
+            <div className="flex items-center gap-1"><ShieldCheck size={10} /> SEC: {telemetry.encryption}</div>
+            <div className="flex items-center gap-1"><Cpu size={10} /> CORE: {telemetry.engine}</div>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end">
+          <div className="bg-red-600 text-black font-black px-2 py-1 text-[10px] mb-2">
+            PROTOCOL: RTC_V1
+          </div>
+          <div className="text-[9px] text-[#D4AF37] border border-[#D4AF37] px-2 py-1">
+            LATENCY: {telemetry.latency}
+          </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-red-600 text-black font-black px-4 py-2 animate-bounce flex items-center gap-2">
-        <MessageSquare size={16}/> {taunt}
+
+      {/* Main Connection Interface */}
+      <div className="flex-1 flex flex-col justify-center items-center gap-6 relative">
+        
+        {/* Background Decorative Grid/Scanline Effect */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none" 
+             style={{ backgroundImage: 'linear-gradient(rgba(212,175,55,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+
+        {callState === 'IDLE' && (
+          <div className="w-full max-w-sm space-y-6 z-10">
+            <div className="border-2 border-white p-4 bg-black/90">
+              <div className="text-[10px] text-[#D4AF37] uppercase mb-2 font-bold tracking-widest">My Access Node</div>
+              <div className="text-sm break-all font-bold tracking-tight text-white mb-3">
+                {peerId || 'GENERATING_NODE_ID...'}
+              </div>
+              <button 
+                onClick={() => { navigator.clipboard.writeText(peerId); WebApp.HapticFeedback.impactOccurred('medium') }}
+                className="w-full text-[10px] border border-white py-2 hover:bg-white hover:text-black transition-all font-black"
+              >
+                COPY_STATION_ID
+              </button>
+            </div>
+
+            <div className="border-2 border-white p-4 bg-black/90">
+              <div className="text-[10px] text-[#D4AF37] uppercase mb-2 font-bold tracking-widest">Target Node</div>
+              <input 
+                type="text"
+                value={targetId}
+                onChange={(e) => setTargetId(e.target.value)}
+                placeholder="ENTER_REMOTE_STATION_ID"
+                className="w-full bg-transparent border-b border-[#D4AF37] py-2 focus:outline-none text-sm placeholder:opacity-30"
+              />
+            </div>
+
+            <button 
+              disabled={!targetId}
+              onClick={startCall}
+              className="w-full bg-[#D4AF37] text-black py-5 font-black flex items-center justify-center gap-3 disabled:opacity-30 active:scale-[0.98] transition-transform"
+            >
+              <Radio size={24} /> INITIATE_UPLINK
+            </button>
+          </div>
+        )}
+
+        {(callState === 'DIALING' || callState === 'ACTIVE' || callState === 'INCOMING') && (
+          <div className="flex flex-col items-center gap-10 z-10 w-full">
+            <div className="relative">
+              <div className={`w-40 h-40 border-4 border-[#D4AF37] flex items-center justify-center bg-black ${callState === 'ACTIVE' ? 'shadow-[0_0_30px_rgba(212,175,55,0.3)]' : ''}`}>
+                <div className="absolute inset-2 border border-[#D4AF37]/30" />
+                <Zap size={64} className={callState === 'ACTIVE' ? 'text-[#D4AF37]' : 'text-white animate-pulse'} />
+              </div>
+              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-[#D4AF37] text-black px-4 py-1 text-xs font-black">
+                {callState}
+              </div>
+            </div>
+
+            <div className="text-center">
+              <div className="text-5xl font-black tracking-tighter mb-2 text-white">
+                {callState === 'ACTIVE' ? formatDuration(duration) : 'SCANNING'}
+              </div>
+              <div className="flex items-center justify-center gap-2 text-[10px] text-[#D4AF37] font-bold uppercase tracking-widest">
+                <div className="w-1.5 h-1.5 bg-[#D4AF37] rounded-full animate-ping" />
+                Secure Channel Active
+              </div>
+            </div>
+
+            <div className="w-full max-w-sm grid grid-cols-2 gap-4 px-4">
+              {callState === 'INCOMING' ? (
+                <>
+                  <button onClick={answerCall} className="bg-[#D4AF37] text-black py-5 font-black flex items-center justify-center gap-2 active:bg-white active:scale-95 transition-all">
+                    ACCEPT
+                  </button>
+                  <button onClick={endCall} className="bg-white text-black py-5 font-black flex items-center justify-center gap-2 active:bg-red-600 active:scale-95 transition-all">
+                    DECLINE
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={toggleMic} className="border-2 border-white py-5 font-black flex items-center justify-center gap-2 active:bg-white active:text-black transition-all">
+                    {micEnabled ? <Mic size={20} /> : <MicOff size={20} className="text-red-500" />}
+                    {micEnabled ? 'MIC_ON' : 'MUTED'}
+                  </button>
+                  <button onClick={endCall} className="bg-red-600 text-white py-5 font-black flex items-center justify-center gap-2 active:bg-white active:text-black transition-all">
+                    <PhoneOff size={20} /> TERMINATE
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {callState === 'ENDED' && (
+          <div className="text-center z-10">
+            <div className="text-3xl font-black text-red-600 mb-2 tracking-tighter">SESSION_TERMINATED</div>
+            <div className="text-[10px] text-[#D4AF37] font-bold uppercase tracking-[0.3em] animate-pulse">Reverting to Standby</div>
+          </div>
+        )}
       </div>
-      <canvas ref={canvasRef} width={800} height={600} className="w-full h-full object-contain" />
-      {!gameStarted && (
-        <button onClick={() => setGameStarted(true)} className="absolute inset-0 bg-black flex items-center justify-center font-black text-4xl text-red-600">
-          INITIATE POKE
-        </button>
-      )}
+
+      {/* HUD Footer - Tech Specs */}
+      <div className="mt-4 border-t border-white/20 pt-4 flex justify-between items-end text-[8px] font-bold tracking-widest opacity-40 uppercase">
+        <div className="space-y-1">
+          <div>Buffer: {telemetry.buffer}</div>
+          <div>Node_ID: {peerId.slice(0, 8)}...</div>
+        </div>
+        <div className="text-right space-y-1">
+          <div>Codec: OPUS_VOICE</div>
+          <div> 2026 LORD_POKE_SYSTEMS</div>
+        </div>
+      </div>
+
+      <audio ref={remoteAudioRef} autoPlay />
     </div>
   );
 }

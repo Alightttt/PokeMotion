@@ -16,7 +16,9 @@
     "framer-motion": "^11.2.10",
     "uuid": "^10.0.0",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.3.0"
+    "tailwind-merge": "^2.3.0",
+    "peerjs": "^1.5.4",
+    "@twa-dev/sdk": "^7.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
