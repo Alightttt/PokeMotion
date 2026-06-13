@@ -255,117 +255,127 @@ export default function App() {
   };
 
   const IconButton = ({ icon: Icon, label, action, active, disabled, variant = 'glass' }) => (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-3">
       <button 
         onClick={action}
         disabled={disabled}
-        className={`w-[4.5rem] h-[4.5rem] flex items-center justify-center rounded-full transition-all duration-300
-          ${variant === 'glass' ? (active ? 'bg-white text-black' : 'bg-white/10 backdrop-blur-xl text-white hover:bg-white/20 border border-white/5') : ''}
-          ${variant === 'green' ? 'bg-[#34C759] text-white' : ''}
-          ${variant === 'red' ? 'bg-[#FF3B30] text-white' : ''}
-          ${disabled ? 'opacity-30' : 'active:scale-90'}`}
+        className={`w-20 h-20 flex items-center justify-center rounded-full transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+          ${variant === 'glass' ? (active ? 'bg-white text-black scale-105 shadow-xl' : 'bg-white/10 backdrop-blur-3xl text-white hover:bg-white/20 border border-white/5') : ''}
+          ${variant === 'green' ? 'bg-[#34C759] text-white shadow-[0_0_40px_rgba(52,199,89,0.3)]' : ''}
+          ${variant === 'red' ? 'bg-[#FF3B30] text-white shadow-[0_0_40px_rgba(255,59,48,0.3)]' : ''}
+          ${disabled ? 'opacity-20 cursor-not-allowed' : 'active:scale-95'}`}
       >
-        <Icon size={28} fill={variant !== 'glass' ? "currentColor" : (active ? "black" : "none")} />
+        <Icon size={32} fill={variant !== 'glass' ? "currentColor" : (active ? "black" : "none")} strokeWidth={1.5} />
       </button>
-      <span className={`text-[11px] font-medium text-white/90 transition-opacity ${disabled ? 'opacity-30' : 'opacity-100'}`}>
+      <span className={`text-xs font-medium tracking-tight text-white/70 transition-opacity duration-300 ${disabled ? 'opacity-20' : 'opacity-100'}`}>
         {label}
       </span>
     </div>
   );
 
-  if (callState === 'IDLE') {
-    return (
-      <div className="h-[100svh] bg-black text-white flex flex-col items-center justify-between py-24 px-8 select-none font-sans">
-        <div className="flex flex-col items-center gap-6 animate-in fade-in duration-1000 slide-in-from-top-10">
-          <div className="w-24 h-24 bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl flex items-center justify-center text-4xl shadow-2xl border border-white/10 overflow-hidden relative">
-             <div className="absolute inset-0 bg-white/5 backdrop-blur-sm" />
-             <span className="relative z-10">🌴</span>
-          </div>
-          <div className="text-center">
-            <h1 className="text-4xl font-semibold tracking-tight text-white mb-2">Lord Poke</h1>
-            <p className="text-sm text-white/40 tracking-wider uppercase">AI Voice Terminal</p>
-          </div>
-        </div>
+  return (
+    <div className="h-[100svh] bg-black text-white flex flex-col items-center select-none relative overflow-hidden font-sans">
+      {/* Premium iOS Fluid Background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/50 via-black to-black pointer-events-none" />
+      <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[180%] h-[70%] bg-blue-500/10 blur-[150px] transition-opacity duration-1000 ease-in-out ${callState === 'ACTIVE' ? 'opacity-100' : 'opacity-40'}`} />
+      
+      {/* App Shell Logic */}
+      <div className="z-10 w-full h-full flex flex-col items-center justify-between py-24 px-8 max-w-md">
+        
+        {/* IDLE SCREEN */}
+        {callState === 'IDLE' && (
+          <div className="flex-1 flex flex-col items-center justify-between w-full animate-in fade-in zoom-in-95 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]">
+            <div className="flex flex-col items-center gap-10 mt-10">
+              <div className="w-32 h-32 bg-white/[0.03] backdrop-blur-3xl rounded-[2.5rem] flex items-center justify-center text-5xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 relative group overflow-hidden transition-transform duration-500 hover:scale-105">
+                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
+                 <span className="relative z-10 drop-shadow-2xl">🌴</span>
+              </div>
+              <div className="text-center space-y-3">
+                <h1 className="text-5xl font-semibold tracking-tighter text-white drop-shadow-md">Lord Poke</h1>
+                <p className="text-sm font-medium text-white/30 tracking-[0.2em] uppercase">AI Voice Terminal</p>
+              </div>
+            </div>
 
-        {errorMessage && (
-           <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-2xl text-red-400 text-[11px] animate-pulse">
-             {errorMessage}
-           </div>
+            {errorMessage && (
+              <div className="bg-red-500/10 backdrop-blur-2xl border border-red-500/20 px-6 py-3 rounded-2xl text-red-400 text-xs font-medium animate-in slide-in-from-bottom-2 duration-500">
+                {errorMessage}
+              </div>
+            )}
+
+            <div className="flex flex-col items-center gap-10 pb-10 w-full">
+              <button 
+                onClick={startCall} 
+                className="w-24 h-24 bg-[#34C759] text-white flex items-center justify-center rounded-full shadow-[0_15px_60px_rgba(52,199,89,0.4)] active:scale-90 transition-all duration-300 hover:scale-110 group"
+              >
+                <Phone size={44} fill="currentColor" className="group-hover:rotate-12 transition-transform duration-300" />
+              </button>
+              
+              <button 
+                onClick={simulateIncomingCall}
+                className="bg-white/5 hover:bg-white/10 transition-all duration-300 text-[10px] font-bold text-white/20 hover:text-white/40 tracking-[0.3em] uppercase py-3 px-8 rounded-full border border-white/5"
+              >
+                Simulate Call
+              </button>
+            </div>
+          </div>
         )}
 
-        <div className="w-full max-w-xs flex flex-col items-center gap-8 pb-12">
-          <button 
-            onClick={startCall} 
-            className="w-24 h-24 bg-[#34C759] text-white flex items-center justify-center rounded-full shadow-[0_0_50px_rgba(52,199,89,0.4)] active:scale-90 transition-all hover:scale-105"
-          >
-            <Phone size={40} fill="currentColor" />
-          </button>
-          
-          <button 
-            onClick={simulateIncomingCall}
-            className="text-white/20 hover:text-white/40 transition-colors text-xs font-mono tracking-widest uppercase py-2 px-4 border border-white/5 rounded-full"
-          >
-            Simulate Incoming
-          </button>
-        </div>
-      </div>
-    );
-  }
+        {/* RINGING SCREEN */}
+        {callState === 'RINGING' && (
+          <div className="flex-1 flex flex-col items-center justify-between w-full animate-in fade-in slide-in-from-bottom-10 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]">
+            <div className="text-center mt-16 space-y-4">
+              <p className="text-[#34C759] text-xs font-black tracking-[0.4em] uppercase animate-pulse drop-shadow-glow">Incoming Call</p>
+              <h2 className="text-6xl font-semibold tracking-tighter text-white">Lord Poke</h2>
+              <p className="text-white/40 text-lg font-light tracking-tight">AI Station Calling...</p>
+            </div>
 
-  if (callState === 'RINGING') {
-    return (
-      <div className="h-[100svh] bg-black text-white flex flex-col items-center justify-between py-32 px-12 select-none font-sans animate-in fade-in duration-500">
-        <div className="text-center">
-          <p className="text-[#34C759] text-xs font-mono uppercase tracking-[0.3em] mb-4 animate-pulse">Incoming Call</p>
-          <h2 className="text-5xl font-semibold tracking-tight text-white mb-2">Lord Poke</h2>
-          <p className="text-white/40 text-sm font-light">PokeMotion AI Station</p>
-        </div>
+            <div className="w-full flex justify-around items-center px-4 mb-20">
+              <IconButton icon={PhoneOff} label="Decline" action={endCall} variant="red" />
+              <IconButton icon={Phone} label="Accept" action={acceptCall} variant="green" />
+            </div>
+          </div>
+        )}
 
-        <div className="w-full flex justify-between items-center max-w-[320px] mb-12">
-          <IconButton icon={PhoneOff} label="Decline" action={endCall} variant="red" />
-          <IconButton icon={Phone} label="Accept" action={acceptCall} variant="green" />
-        </div>
-      </div>
-    );
-  }
+        {/* ACTIVE / DIALING SCREEN */}
+        {(callState === 'ACTIVE' || callState === 'DIALING') && (
+          <div className="flex-1 flex flex-col items-center justify-between w-full animate-in fade-in duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)]">
+            <div className="pt-10 text-center space-y-2">
+              <h2 className="text-4xl font-semibold tracking-tight text-white drop-shadow-lg">Lord Poke</h2>
+              <p className="text-2xl tabular-nums text-white/50 font-light tracking-widest h-8 font-mono">
+                {callState === 'ACTIVE' ? formatTime(callTimer) : 'calling...'}
+              </p>
+            </div>
 
-  return (
-    <div className="h-[100svh] bg-black text-white flex flex-col select-none relative overflow-hidden font-sans">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[60%] bg-gradient-to-b from-blue-500/10 to-transparent blur-[140px] pointer-events-none" />
+            <div className="flex-1 flex items-center justify-center w-full max-w-[320px]">
+              <div className="grid grid-cols-3 gap-x-8 gap-y-12 w-full animate-in zoom-in-95 duration-1000 delay-200 ease-out">
+                <IconButton icon={micMuted ? MicOff : Mic} label="mute" action={toggleMute} active={micMuted} />
+                <IconButton icon={Grid} label="keypad" disabled />
+                <IconButton icon={Volume2} label="speaker" action={() => setSpeakerOn(!speakerOn)} active={speakerOn} />
+                <IconButton icon={Plus} label="add call" disabled />
+                <IconButton icon={Video} label="FaceTime" disabled />
+                <IconButton icon={Info} label="info" disabled />
+              </div>
+            </div>
 
-      <div className="pt-24 text-center z-10 animate-in fade-in slide-in-from-top-5 duration-700">
-        <h2 className="text-4xl font-semibold tracking-tight text-white mb-2">Lord Poke</h2>
-        <p className="text-xl tabular-nums text-white/60 font-light h-8 tracking-wider">
-          {callState === 'ACTIVE' ? formatTime(callTimer) : (callState === 'DIALING' ? 'calling...' : '')}
-        </p>
-      </div>
+            {transcript && (
+              <div className="absolute top-[48%] left-1/2 -translate-x-1/2 w-[85%] text-center pointer-events-none z-20">
+                <div className="bg-white/[0.04] backdrop-blur-3xl border border-white/10 rounded-[2rem] p-6 text-[15px] font-medium leading-relaxed text-white/90 shadow-[0_30px_60px_rgba(0,0,0,0.6)] animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
+                  {transcript}
+                </div>
+              </div>
+            )}
 
-      <div className="flex-1 flex items-center justify-center z-10 px-8">
-        <div className="w-full grid grid-cols-3 gap-y-14 max-w-[320px]">
-          <IconButton icon={micMuted ? MicOff : Mic} label="mute" action={toggleMute} active={micMuted} />
-          <IconButton icon={Grid} label="keypad" disabled />
-          <IconButton icon={Volume2} label="speaker" action={() => setSpeakerOn(!speakerOn)} active={speakerOn} />
-          <IconButton icon={Plus} label="add call" disabled />
-          <IconButton icon={Video} label="FaceTime" disabled />
-          <IconButton icon={Info} label="info" disabled />
-        </div>
-      </div>
+            <div className="pb-10">
+              <button 
+                onClick={endCall} 
+                className="w-24 h-24 bg-[#FF3B30] text-white flex items-center justify-center rounded-full active:scale-90 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-[0_15px_60px_rgba(255,59,48,0.4)] hover:scale-105"
+              >
+                <PhoneOff size={44} fill="currentColor" className="rotate-[135deg]" />
+              </button>
+            </div>
+          </div>
+        )}
 
-      {transcript && (
-        <div className="absolute top-[48%] left-0 w-full text-center px-12 pointer-events-none z-20 transition-all duration-500 animate-in fade-in slide-in-from-bottom-6">
-           <div className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-5 text-[14px] font-medium leading-relaxed text-white/90 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-              {transcript}
-           </div>
-        </div>
-      )}
-
-      <div className="pb-24 flex justify-center z-10">
-        <button 
-          onClick={endCall} 
-          className="w-24 h-24 bg-[#FF3B30] text-white flex items-center justify-center rounded-full active:scale-90 transition-all shadow-[0_0_50px_rgba(255,59,48,0.4)] hover:scale-105"
-        >
-          <PhoneOff size={40} fill="currentColor" className="rotate-[135deg]" />
-        </button>
       </div>
     </div>
   );
