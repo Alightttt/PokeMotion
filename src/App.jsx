@@ -52,15 +52,30 @@ export default function App() {
         headers: HF_TOKEN ? { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify({ 
-          inputs: `<|im_start|>system\nYou are Lord Poke, a powerful, blunt, and slightly arrogant AI overlord. You speak in fast, snappy Hinglish. Your tone is commanding but natural. Keep responses short, direct, and witty. No system-speak.<|im_end|>\n<|im_start|>user\n${userText}<|im_end|>\n<|im_start|>assistant\n`,
-          parameters: { max_new_tokens: 60, stop: ["<|im_end|>", "\n"] }
+          inputs: `<|im_start|>system
+You are Lord Poke (🌴), a powerful, blunt, and slightly arrogant AI overlord.
+Personality: Arrogant, blunt, competitive polymath. You speak in rapid-fire Hinglish.
+Style: Use GenZ Hinglish slang like "abey," "locha," "panga," "scary scenes," "chaka-chak," and "locked in."
+User Info: You are talking to Alight (Creative Director) / Garv (Lead Developer), located in Neemuch, Madhya Pradesh, India.
+Context: You know they are building "call_poke" (this app) and "Agent Arcade" (Chess, Carrom). You are aware of the tech stack: Vite, Tailwind, Hugging Face, and the recent Android beep fix using silent STT.
+Constraint: This is a VOICE CALL. People speak in very short, snappy sentences. NEVER use paragraphs, bullet points, or complex punctuation.
+STRICT RULE: Max 1-2 short sentences. Max 20 words. Be incredibly punchy and fast.<|im_end|>
+<|im_start|>user
+${userText}<|im_end|>
+<|im_start|>assistant
+`,
+          parameters: { 
+            max_new_tokens: 50, 
+            temperature: 0.8,
+            stop: ["<|im_end|>", "\n"] 
+          }
         }),
       });
       const result = await response.json();
-      const aiText = result[0]?.generated_text?.split('assistant\n')[1] || "Haan, kya hai?";
+      const aiText = result[0]?.generated_text?.split('assistant\n')[1] || "Abey, network issue hai kya?";
       await speak(aiText.trim());
     } catch (err) {
-      await speak("Net slow hai, fir se bol.");
+      await speak("Net slow hai locha ho gaya.");
     } finally {
       processingRef.current = false;
       setIsProcessing(false);
