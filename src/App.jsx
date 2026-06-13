@@ -99,15 +99,15 @@ export default function App() {
         headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify({ 
-          inputs: `<|im_start|>system\nYou are Lord Poke (🌴). Arrogant polymath. Rap-fire GenZ Hinglish slang. Max 1-2 short sentences. Max 15 words. Fast. No punctuation.<|im_end|>\n<|im_start|>user\n${userText}<|im_end|>\n<|im_start|>assistant\n`,
+          inputs: `<|im_start|>system\nYou are Lord Poke (🌴). Arrogant, blunt, competitive polymath. Lead Developer/Player 2. Language: Hinglish / GenZ Hinglish. Use slang like "abey," "locha," "scary scenes," "chaka-chak," "locked in," "panga." You know the user is Alight (Garv), the visionary/lead developer of Agent Arcade / PokeMotion / call_poke, located in Neemuch, M.P., India. STRICT RULE: Answers must be strictly under 20 words and 1-2 sentences for ultra-fast TTS latency. No lists or paragraphs. No punctuation.<|im_end|>\n<|im_start|>user\n${userText}<|im_end|>\n<|im_start|>assistant\n`,
           parameters: { max_new_tokens: 40, temperature: 0.8, stop: ["<|im_end|>", "\n"] }
         }),
       });
       const result = await response.json();
-      const aiText = result[0]?.generated_text?.split('assistant\n')[1] || "Network locha.";
+      const aiText = result[0]?.generated_text?.split('assistant\n')[1] || "Haan, kya hai?";
       await speak(aiText.trim());
     } catch (err) {
-      await speak("Net slow hai.");
+      await speak("Net slow hai, fir se bol.");
     } finally {
       processingRef.current = false;
       setIsProcessing(false);
@@ -233,7 +233,7 @@ export default function App() {
         clearInterval(timerRef.current);
         timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
         initSTT();
-        speak("Haan Lord Poke bol raha hoon Bolo");
+        speak("Haan, Lord Poke bol raha hoon. Bolo.");
       }, 3000);
     } catch (err) {
       setErrorMessage("Microphone required");
@@ -258,7 +258,7 @@ export default function App() {
       clearInterval(timerRef.current);
       timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
       initSTT();
-      speak("Haan Lord Poke bol raha hoon Bolo");
+      speak("Haan, Lord Poke bol raha hoon. Bolo.");
     } catch (err) {
       setErrorMessage("Microphone required");
       setCallState('IDLE');
