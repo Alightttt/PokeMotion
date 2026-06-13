@@ -99,18 +99,35 @@ export default function App() {
   const speak = async (text) => {
     try {
       const response = await fetch(INDIC_MIO_API, {
-        headers: HF_TOKEN ? { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" },
+        headers: { 
+          Authorization: `Bearer ${HF_TOKEN}`, 
+          "Content-Type": "application/json" 
+        },
         method: "POST",
-        body: JSON.stringify({ inputs: text }),
+        body: JSON.stringify({ 
+          inputs: text 
+        }),
       });
-      if (!response.ok) throw new Error("TTS API Failed");
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`TTS API Failed: ${response.status} ${JSON.stringify(errorData)}`);
+      }
+
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
+      
+      // Cleanup previous URL to prevent memory leaks
+      if (ttsAudioRef.current.src) {
+        URL.revokeObjectURL(ttsAudioRef.current.src);
+      }
+      
       ttsAudioRef.current.src = url;
       setTranscript(`Lord Poke: ${text}`);
       await updateAudioOutput(speakerOn);
       await ttsAudioRef.current.play();
     } catch (err) {
+      console.error("Indic-Mio TTS failed, falling back to browser TTS:", err);
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'hi-IN';
       window.speechSynthesis.speak(utterance);
