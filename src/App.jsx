@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import Peer from 'peerjs';
 import { 
-  Phone, PhoneOff, Mic, MicOff, Grid, UserPlus, Video, 
-  Users, Volume2, Plus, Info, MessageSquare, SignalHigh, X
+  Phone, PhoneOff, Mic, MicOff, Grid, Video, 
+  Users, Volume2, Plus, Send
 } from "lucide-react";
 import { audioEngine } from './AudioEngine';
 
@@ -12,7 +11,6 @@ const STT_API = "https://api-inference.huggingface.co/models/openai/whisper-larg
 const HF_TOKEN = import.meta.env.VITE_HF_TOKEN || ""; 
 
 export default function App() {
-  const [peerId, setPeerId] = useState('');
   const [callState, setCallState] = useState('IDLE'); 
   const [transcript, setTranscript] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -21,19 +19,14 @@ export default function App() {
   const [speakerOn, setSpeakerOn] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   
-  const peerRef = useRef(null);
-  const callRef = useRef(null);
   const localStreamRef = useRef(null);
-  const remoteAudioRef = useRef(null);
   const audioCleanupRef = useRef(null);
   const ttsAudioRef = useRef(new Audio());
   const timerRef = useRef(null);
-  const recognitionRef = useRef(null);
   const processingRef = useRef(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  
-  const isLordPoke = new URLSearchParams(window.location.search).get('station') === '001';
+  const audioContextRef = useRef(null);
 
   const stopTone = () => {
     if (audioCleanupRef.current) {
@@ -46,171 +39,6 @@ export default function App() {
     const mins = Math.floor(s / 60);
     const secs = s % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  useEffect(() => {
-    if (isLordPoke) {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        localStreamRef.current = stream;
-      }).catch(err => {
-        console.error("Mic access denied:", err);
-        setErrorMessage("Microphone access required for Station mode.");
-      });
-    }
-
-    const initPeer = () => {
-      const peer = new Peer(isLordPoke ? 'LORD_POKE_STATION_001' : undefined);
-      peerRef.current = peer;
-
-      peer.on('open', (id) => {
-        setPeerId(id);
-        setErrorMessage('');
-      });
-
-      peer.on('disconnected', () => {
-        console.log("Peer disconnected, attempting to reconnect...");
-        peer.reconnect();
-      });
-      
-      peer.on('error', (err) => {
-        console.error("PeerJS Error:", err.type, err);
-        if (err.type === 'unavailable-id') {
-          setErrorMessage("Connection ID is already in use.");
-        } else if (err.type === 'peer-unavailable') {
-           setErrorMessage("Station is currently offline.");
-           endCall();
-        } else {
-          setErrorMessage(`Connection Error: ${err.type}`);
-        }
-      });
-
-      peer.on('call', (incomingCall) => {
-        if (isLordPoke) {
-          incomingCall.on('stream', (remoteStream) => {
-             setupCall(incomingCall, remoteStream);
-          });
-          incomingCall.on('close', endCall);
-          incomingCall.on('error', (err) => {
-            console.error("Incoming call error:", err);
-            endCall();
-          });
-
-          if (localStreamRef.current) {
-            incomingCall.answer(localStreamRef.current);
-          } else {
-            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-              localStreamRef.current = stream;
-              incomingCall.answer(stream);
-            });
-          }
-        } else {
-          setCallState('INCOMING');
-          callRef.current = incomingCall;
-          incomingCall.on('close', endCall);
-          incomingCall.on('error', endCall);
-          stopTone();
-          audioCleanupRef.current = audioEngine.playRingTone();
-        }
-      });
-    };
-
-    initPeer();
-
-    return () => {
-      peerRef.current?.destroy();
-      clearInterval(timerRef.current);
-    };
-  }, [isLordPoke]);
-
-  // STT Fix: Using MediaRecorder + VAD to avoid Android's webkitSpeechRecognition beep
-  const initSTT = useCallback(() => {
-    if (!isLordPoke || !localStreamRef.current) return;
-
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioContext.createMediaStreamSource(localStreamRef.current);
-      const analyzer = audioContext.createAnalyser();
-      analyzer.fftSize = 256;
-      source.connect(analyzer);
-
-      const bufferLength = analyzer.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-
-      let isSpeaking = false;
-      let silenceStart = Date.now();
-      const THRESHOLD = 40; 
-      const SILENCE_DURATION = 1500; 
-
-      const mediaRecorder = new MediaRecorder(localStreamRef.current);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        audioChunksRef.current = [];
-        if (audioBlob.size > 5000) { // Ignore tiny blips
-           processAudioWithWhisper(audioBlob);
-        }
-      };
-
-      const checkAudio = () => {
-        if (callState !== 'ACTIVE') return;
-        analyzer.getByteFrequencyData(dataArray);
-        let volume = 0;
-        for (let i = 0; i < bufferLength; i++) volume += dataArray[i];
-        volume /= bufferLength;
-
-        if (volume > THRESHOLD) {
-          if (!isSpeaking) {
-            isSpeaking = true;
-            if (mediaRecorder.state === 'inactive') mediaRecorder.start();
-          }
-          silenceStart = Date.now();
-        } else {
-          if (isSpeaking && Date.now() - silenceStart > SILENCE_DURATION) {
-            isSpeaking = false;
-            if (mediaRecorder.state === 'recording') mediaRecorder.stop();
-          }
-        }
-        requestAnimationFrame(checkAudio);
-      };
-
-      checkAudio();
-    } catch (e) {
-      console.error("STT Init Error:", e);
-      // Fallback to native if audio context fails
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.onresult = (event) => {
-        if (processingRef.current) return;
-        const text = event.results[event.results.length - 1][0].transcript;
-        if (isLordPoke && text.trim().length > 0) getLordPokeResponse(text.trim());
-      };
-      recognitionRef.current.onend = () => { if (callState === 'ACTIVE') recognitionRef.current.start(); };
-      recognitionRef.current.start();
-    }
-  }, [isLordPoke, callState]);
-
-  const processAudioWithWhisper = async (blob) => {
-    if (processingRef.current) return;
-    try {
-      const response = await fetch(STT_API, {
-        headers: { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "audio/webm" },
-        method: "POST",
-        body: blob,
-      });
-      const result = await response.json();
-      if (result.text) {
-        getLordPokeResponse(result.text);
-      }
-    } catch (err) {
-      console.error("Whisper error:", err);
-    }
   };
 
   const getLordPokeResponse = async (userText) => {
@@ -246,6 +74,7 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ inputs: text }),
       });
+      if (!response.ok) throw new Error("TTS API Failed");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       ttsAudioRef.current.src = url;
@@ -259,94 +88,131 @@ export default function App() {
     }
   };
 
-  const setupCall = (call, stream) => {
-    callRef.current = call;
-    stopTone();
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = stream;
-      remoteAudioRef.current.play().catch(e => console.error("Audio play failed:", e));
+  const processAudioWithWhisper = async (blob) => {
+    if (processingRef.current) return;
+    try {
+      const response = await fetch(STT_API, {
+        headers: HF_TOKEN ? { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "audio/webm" } : { "Content-Type": "audio/webm" },
+        method: "POST",
+        body: blob,
+      });
+      const result = await response.json();
+      if (result.text && result.text.trim().length > 1) {
+        getLordPokeResponse(result.text);
+      }
+    } catch (err) {
+      console.error("Whisper error:", err);
     }
-    setCallState('ACTIVE');
-    setCallTimer(0);
-    clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
-    
-    // Start STT after small delay to let stream stabilize
-    setTimeout(initSTT, 500);
-
-    if (isLordPoke) speak("Haan, Lord Poke bol raha hoon. Bolo.");
   };
+
+  const initSTT = useCallback(() => {
+    if (!localStreamRef.current) return;
+
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(localStreamRef.current);
+      const analyzer = audioContext.createAnalyser();
+      analyzer.fftSize = 256;
+      source.connect(analyzer);
+
+      const bufferLength = analyzer.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      let isSpeaking = false;
+      let silenceStart = Date.now();
+      const THRESHOLD = 35; 
+      const SILENCE_DURATION = 1500; 
+
+      const mediaRecorder = new MediaRecorder(localStreamRef.current);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        audioChunksRef.current = [];
+        if (audioBlob.size > 2000) { 
+           processAudioWithWhisper(audioBlob);
+        }
+      };
+
+      const checkAudio = () => {
+        if (callState !== 'ACTIVE' && callState !== 'CONNECTED') return;
+        analyzer.getByteFrequencyData(dataArray);
+        let volume = 0;
+        for (let i = 0; i < bufferLength; i++) volume += dataArray[i];
+        volume /= bufferLength;
+
+        if (volume > THRESHOLD) {
+          if (!isSpeaking) {
+            isSpeaking = true;
+            if (mediaRecorder.state === 'inactive') mediaRecorder.start();
+          }
+          silenceStart = Date.now();
+        } else {
+          if (isSpeaking && Date.now() - silenceStart > SILENCE_DURATION) {
+            isSpeaking = false;
+            if (mediaRecorder.state === 'recording') mediaRecorder.stop();
+          }
+        }
+        if (callState === 'ACTIVE' || callState === 'CONNECTED') {
+          requestAnimationFrame(checkAudio);
+        }
+      };
+
+      checkAudio();
+    } catch (e) {
+      console.error("STT Init Error:", e);
+    }
+  }, [callState]);
 
   const startCall = async () => {
-    audioEngine.init();
-    setCallState('DIALING');
-    setErrorMessage('');
-    audioCleanupRef.current = audioEngine.playDialTone();
     try {
+      audioEngine.init();
+      setCallState('DIALING');
+      setErrorMessage('');
+      audioCleanupRef.current = audioEngine.playDialTone();
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
-      const call = peerRef.current.call('LORD_POKE_STATION_001', stream);
-      callRef.current = call;
-      
-      call.on('stream', (remoteStream) => {
-        setupCall(call, remoteStream);
-      });
-      call.on('close', endCall);
-      call.on('error', (err) => {
-        console.error("Outbound call error:", err);
-        endCall();
-      });
+
+      // Simulate a short connection delay for the dial tone feel
+      setTimeout(() => {
+        stopTone();
+        setCallState('ACTIVE');
+        setCallTimer(0);
+        clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
+        
+        initSTT();
+        speak("Haan, Lord Poke bol raha hoon. Bolo.");
+      }, 2000);
+
     } catch (err) {
       console.error("Start call error:", err);
-      endCall();
+      setErrorMessage("Microphone access required.");
+      setCallState('IDLE');
     }
-  };
-
-  const answerCall = async () => {
-     if (!callRef.current) return;
-     try {
-       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-       localStreamRef.current = stream;
-       callRef.current.on('stream', (remoteStream) => {
-         setupCall(callRef.current, remoteStream);
-       });
-       callRef.current.answer(stream);
-     } catch(err) {
-       console.error("Answer call error:", err);
-       endCall();
-     }
   };
 
   const endCall = () => {
     stopTone();
     
-    if (callRef.current) {
-      callRef.current.close();
-      if (callRef.current.peerConnection) {
-        callRef.current.peerConnection.close();
-      }
-      callRef.current = null;
-    }
-
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(t => {
-        t.stop();
-        localStreamRef.current.removeTrack(t);
-      });
+      localStreamRef.current.getTracks().forEach(t => t.stop());
       localStreamRef.current = null;
     }
 
-    if (remoteAudioRef.current) {
-      const stream = remoteAudioRef.current.srcObject;
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-      }
-      remoteAudioRef.current.srcObject = null;
-    }
-
-    recognitionRef.current?.stop();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
+    }
+    
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
     }
 
     clearInterval(timerRef.current);
@@ -393,7 +259,7 @@ export default function App() {
           </div>
           <div className="text-center">
             <h1 className="text-3xl font-semibold tracking-tight">Lord Poke</h1>
-            <p className="text-sm text-white/40 mt-1">PokeMotion Station 001</p>
+            <p className="text-sm text-white/40 mt-1">PokeMotion AI Terminal</p>
           </div>
         </div>
 
@@ -415,22 +281,6 @@ export default function App() {
     );
   }
 
-  if (callState === 'INCOMING') {
-    return (
-      <div className="h-[100svh] bg-[#0a0a0a] text-white flex flex-col items-center justify-between py-24 px-12 select-none font-sans">
-        <div className="text-center">
-          <p className="text-white/60 text-xs uppercase tracking-[0.2em] mb-3">Incoming Call</p>
-          <h2 className="text-4xl font-semibold tracking-tight">Lord Poke</h2>
-        </div>
-
-        <div className="w-full flex justify-between items-center max-w-[280px]">
-          <IconButton icon={PhoneOff} label="Decline" action={endCall} variant="red" />
-          <IconButton icon={Phone} label="Accept" action={answerCall} variant="green" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-[100svh] bg-black text-white flex flex-col select-none relative overflow-hidden font-sans">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[50%] bg-gradient-to-b from-blue-500/10 to-transparent blur-[120px] pointer-events-none" />
@@ -438,7 +288,7 @@ export default function App() {
       <div className="pt-24 text-center z-10">
         <h2 className="text-3xl font-semibold tracking-tight mb-1">Lord Poke</h2>
         <p className="text-lg tabular-nums text-white/60 font-light h-8">
-          {callState === 'ACTIVE' ? formatTime(callTimer) : (callState === 'DIALING' ? 'calling...' : '')}
+          {callState === 'ACTIVE' || callState === 'CONNECTED' ? formatTime(callTimer) : (callState === 'DIALING' ? 'calling...' : '')}
         </p>
       </div>
 
@@ -469,7 +319,6 @@ export default function App() {
           <PhoneOff size={36} fill="currentColor" className="rotate-[135deg]" />
         </button>
       </div>
-      <audio ref={remoteAudioRef} autoPlay playsInline />
     </div>
   );
 }
