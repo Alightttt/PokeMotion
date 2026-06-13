@@ -1,23 +1,23 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Peer from 'peerjs';
-import WebApp from '@twa-dev/sdk';
 import { 
-  Phone, PhoneOff, Mic, MicOff, Zap, Activity, 
-  Cpu, Monitor, ShieldCheck, Wifi, SignalHigh, Radio, MessageSquare, Volume2
+  Phone, PhoneOff, Mic, MicOff, Grid, UserPlus, Video, 
+  Users, Volume2, Plus, Info, MessageSquare, SignalHigh
 } from "lucide-react";
 import { audioEngine } from './AudioEngine';
 
-// Model Constants
 const INDIC_MIO_API = "https://api-inference.huggingface.co/models/SPRINGLab/Indic-Mio";
 const LLM_API = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";
 const HF_TOKEN = import.meta.env.VITE_HF_TOKEN || ""; 
 
 export default function App() {
   const [peerId, setPeerId] = useState('');
-  const [targetId, setTargetId] = useState('');
   const [callState, setCallState] = useState('IDLE'); 
   const [transcript, setTranscript] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [callTimer, setCallTimer] = useState(0);
+  const [micMuted, setMicMuted] = useState(false);
+  const [speakerOn, setSpeakerOn] = useState(true);
   
   const peerRef = useRef(null);
   const callRef = useRef(null);
@@ -25,36 +25,30 @@ export default function App() {
   const remoteAudioRef = useRef(null);
   const audioCleanupRef = useRef(null);
   const ttsAudioRef = useRef(new Audio());
+  const timerRef = useRef(null);
   const recognitionRef = useRef(null);
   
-  const audioContextRef = useRef(null);
   const isLordPoke = new URLSearchParams(window.location.search).get('station') === '001';
 
-  // Helper to safely stop any playing tone
   const stopTone = () => {
-    console.log("[AUDIO] Stopping tones...");
     if (audioCleanupRef.current) {
-      try {
-        audioCleanupRef.current();
-      } catch (e) {
-        console.error("[AUDIO] Error stopping tone:", e);
-      }
+      audioCleanupRef.current();
       audioCleanupRef.current = null;
     }
   };
 
-  // Initialize Tools
+  const formatTime = (s) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   useEffect(() => {
     const peer = new Peer(isLordPoke ? 'LORD_POKE_STATION_001' : undefined);
     peerRef.current = peer;
-
-    peer.on('open', (id) => {
-      setPeerId(id);
-      console.log(`[PEER] ID: ${id}`);
-    });
+    peer.on('open', setPeerId);
     
     peer.on('call', (incomingCall) => {
-      console.log("[PEER] Incoming call...");
       if (isLordPoke) {
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
           localStreamRef.current = stream;
@@ -65,53 +59,39 @@ export default function App() {
         setCallState('INCOMING');
         callRef.current = incomingCall;
         stopTone();
-        audioCleanupRef.current = audioEngine.playRingTone() || null;
-        WebApp.HapticFeedback.notificationOccurred('warning');
+        audioCleanupRef.current = audioEngine.playRingTone();
       }
     });
 
-    // Initialize Speech Recognition
+    return () => {
+      peer.destroy();
+      clearInterval(timerRef.current);
+    };
+  }, [isLordPoke]);
+
+  const initSTT = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-US';
-
-      recognitionRef.current.onresult = (event) => {
-        const text = event.results[event.results.length - 1][0].transcript;
-        console.log("[STT] Result:", text);
-        if (isLordPoke && callState === 'ACTIVE' && !isProcessing) {
-          getLordPokeResponse(text);
-        }
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error("[STT] Error:", event.error);
-        if (event.error === 'no-speech' && callState === 'ACTIVE') {
-          // Restart if it stops due to no speech
-          try { recognitionRef.current.start(); } catch(e) {}
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        console.log("[STT] End");
-        if (callState === 'ACTIVE') {
-          try { recognitionRef.current.start(); } catch(e) {}
-        }
-      };
-    }
-
-    return () => peer.destroy();
-  }, [isLordPoke, callState, isProcessing]);
-
-  // LLM Logic
-  const getLordPokeResponse = async (userText) => {
-    if (!userText || userText.trim().length === 0) return;
-    setIsProcessing(true);
-    setTranscript(`[USER]: ${userText}`);
-    console.log(`[LLM] Requesting for: "${userText}"`);
+    if (!SpeechRecognition) return;
     
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = false;
+    
+    recognitionRef.current.onresult = (event) => {
+      const text = event.results[event.results.length - 1][0].transcript;
+      if (isLordPoke) getLordPokeResponse(text);
+    };
+
+    recognitionRef.current.onend = () => {
+      if (callState === 'ACTIVE') recognitionRef.current.start();
+    };
+
+    recognitionRef.current.start();
+  };
+
+  const getLordPokeResponse = async (userText) => {
+    setIsProcessing(true);
+    setTranscript(`User: ${userText}`);
     try {
       const response = await fetch(LLM_API, {
         headers: HF_TOKEN ? { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" },
@@ -121,39 +101,28 @@ export default function App() {
           parameters: { max_new_tokens: 50, stop: ["<|im_end|>"] }
         }),
       });
-
-      if (!response.ok) throw new Error(`LLM_HTTP_${response.status}`);
       const result = await response.json();
       const aiText = result[0]?.generated_text?.split('assistant\n')[1] || "Silence, human.";
-      speakWithIndicMio(aiText.trim());
+      speak(aiText.trim());
     } catch (err) {
-      console.error("[LLM] Fallback triggered", err);
-      speakWithIndicMio("I grow tired of this silence. Explain yourself.");
+      speak("Explain yourself, mortal.");
     }
   };
 
-  // TTS Logic
-  const speakWithIndicMio = async (text) => {
-    setIsProcessing(true);
-    console.log(`[TTS] Synthesizing: "${text}"`);
+  const speak = async (text) => {
     try {
       const response = await fetch(INDIC_MIO_API, {
         headers: HF_TOKEN ? { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify({ inputs: text }),
       });
-
-      if (!response.ok) throw new Error(`TTS_HTTP_${response.status}`);
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      ttsAudioRef.current.src = url;
+      ttsAudioRef.current.src = URL.createObjectURL(blob);
       ttsAudioRef.current.play();
-      setTranscript(`[LORD POKE]: ${text}`);
+      setTranscript(`Lord Poke: ${text}`);
     } catch (err) {
-      console.error("[TTS] Browser Fallback", err);
       const utterance = new SpeechSynthesisUtterance(text);
       window.speechSynthesis.speak(utterance);
-      setTranscript(`[LORD POKE (Fallback)]: ${text}`);
     } finally {
       setIsProcessing(false);
     }
@@ -161,143 +130,124 @@ export default function App() {
 
   const setupCall = (call) => {
     callRef.current = call;
-    
-    call.on('stream', (remoteStream) => {
-      console.log("[PEER] Stream received, transitioning to ACTIVE.");
-      stopTone(); 
-      
+    call.on('stream', (stream) => {
+      stopTone();
       if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.play().catch(e => console.error("[AUDIO] Play failed:", e));
+        remoteAudioRef.current.srcObject = stream;
+        remoteAudioRef.current.play();
       }
       setCallState('ACTIVE');
-      
-      if (isLordPoke) {
-          // Start STT on the station side to listen to the user
-          if (recognitionRef.current) {
-            try { recognitionRef.current.start(); } catch(e) {}
-          }
-          speakWithIndicMio("Uplink synchronized. State your purpose, human.");
-      }
+      setCallTimer(0);
+      timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
+      initSTT();
+      if (isLordPoke) speak("Uplink synchronized. Speak.");
     });
-
-    call.on('close', () => {
-      console.log("[PEER] Connection closed.");
-      endCall();
-    });
-    call.on('error', (err) => {
-      console.error("[PEER] Connection error:", err);
-      endCall();
-    });
+    call.on('close', endCall);
   };
 
   const startCall = async () => {
-    if (!targetId) return;
     audioEngine.init();
     setCallState('DIALING');
-    stopTone();
-    audioCleanupRef.current = audioEngine.playDialTone() || null;
-    
+    audioCleanupRef.current = audioEngine.playDialTone();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
-      const call = peerRef.current.call(targetId, stream);
+      const call = peerRef.current.call('LORD_POKE_STATION_001', stream);
       setupCall(call);
     } catch (err) {
-      console.error("[MEDIA] Mic access denied:", err);
-      stopTone();
-      setCallState('IDLE');
-    }
-  };
-
-  const answerCall = async () => {
-    console.log("[UI] Answering call...");
-    stopTone();
-    audioEngine.init();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      localStreamRef.current = stream;
-      callRef.current.answer(stream);
-      setupCall(callRef.current);
-    } catch (err) {
-      console.error("[MEDIA] Answer failed:", err);
-      setCallState('IDLE');
+      endCall();
     }
   };
 
   const endCall = () => {
     stopTone();
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch(e) {}
-    }
     callRef.current?.close();
     localStreamRef.current?.getTracks().forEach(t => t.stop());
-    setCallState('ENDED');
-    setTimeout(() => setCallState('IDLE'), 2000);
+    recognitionRef.current?.stop();
+    clearInterval(timerRef.current);
+    setCallState('IDLE');
+    setCallTimer(0);
+    setTranscript('');
   };
 
-  return (
-    <div className="fixed inset-0 bg-black text-white font-mono p-4 flex flex-col touch-none border-[12px] border-black">
-      <div className="flex justify-between items-start mb-4">
-        <div className="border border-[#D4AF37] p-3 bg-black/80">
-          <h2 className="text-[#D4AF37] font-black text-lg mb-1 leading-none tracking-tighter">LORD POKE VOICE</h2>
-          <div className="text-[9px] space-y-1 opacity-80">
-            <div className="flex items-center gap-1"><SignalHigh size={10} /> LINK: {peerId ? 'STABLE' : 'ESTABLISHING...'}</div>
-            <div className="flex items-center gap-1"><ShieldCheck size={10} /> SEC: AES-P2P</div>
-            <div className="flex items-center gap-1"><Cpu size={10} /> CORE: {isProcessing ? 'BUSY' : 'IDLE'}</div>
+  const toggleMute = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      audioTrack.enabled = !audioTrack.enabled;
+      setMicMuted(!audioTrack.enabled);
+    }
+  };
+
+  if (callState === 'IDLE') {
+    return (
+      <div className="h-[100svh] bg-black text-[#D4AF37] font-mono flex flex-col p-8 select-none">
+        <div className="flex-1 flex flex-col items-center justify-center gap-6">
+          <div className="w-32 h-32 bg-[#1a1a1a] flex items-center justify-center text-6xl border border-[#D4AF37]/20">🌴</div>
+          <div className="text-center">
+            <h1 className="text-3xl font-bold tracking-tighter mb-1">Lord Poke</h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] opacity-60">Status: Online</p>
           </div>
         </div>
-        <div className="flex flex-col items-end">
-          <div className="bg-red-600 text-black font-black px-2 py-1 text-[10px] mb-2 uppercase">
-            {isLordPoke ? 'STATION_NODE' : 'ACCESS_CLIENT'}
-          </div>
-          <div className="text-[9px] text-[#D4AF37] border border-[#D4AF37] px-2 py-1 uppercase font-bold">
-            STATUS: {callState}
-          </div>
+        <div className="pb-12 flex justify-center">
+          <button onClick={startCall} className="w-20 h-20 bg-[#D4AF37] text-black flex items-center justify-center rounded-full hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(212,175,55,0.3)]">
+            <Phone size={32} fill="currentColor" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-[100svh] bg-black text-[#D4AF37] font-mono flex flex-col select-none relative overflow-hidden">
+      <div className="pt-20 text-center flex-none">
+        <h2 className="text-4xl font-bold tracking-tighter mb-2">Lord Poke</h2>
+        <p className="text-xl tabular-nums opacity-80 h-8">
+          {callState === 'ACTIVE' ? formatTime(callTimer) : 'calling...'}
+        </p>
+      </div>
+
+      <div className="flex-1 px-12 flex items-center">
+        <div className="w-full grid grid-cols-3 gap-y-10 gap-x-4">
+          {[
+            { icon: micMuted ? MicOff : Mic, label: 'mute', action: toggleMute, active: micMuted },
+            { icon: Grid, label: 'keypad', action: () => {}, disabled: true },
+            { icon: Volume2, label: 'audio', action: () => setSpeakerOn(!speakerOn), active: speakerOn },
+            { icon: Plus, label: 'add call', disabled: true },
+            { icon: Video, label: 'FaceTime', disabled: true },
+            { icon: Users, label: 'contacts', disabled: true },
+          ].map((btn, i) => (
+            <div key={i} className="flex flex-col items-center gap-2">
+              <button 
+                onClick={btn.action}
+                disabled={btn.disabled}
+                className={`w-16 h-16 flex items-center justify-center rounded-full transition-all border
+                  ${btn.active ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-white/5 border-white/10 text-[#D4AF37]'}
+                  ${btn.disabled ? 'opacity-20 grayscale' : 'active:bg-white/20'}`}
+              >
+                <btn.icon size={28} />
+              </button>
+              <span className={`text-[10px] uppercase tracking-widest ${btn.disabled ? 'opacity-20' : 'opacity-60'}`}>
+                {btn.label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-center items-center gap-6 relative overflow-hidden">
-        {callState === 'IDLE' ? (
-           <div className="w-full max-w-sm space-y-6 z-10">
-           <div className="border-2 border-white p-4 bg-black/90">
-             <div className="text-[10px] text-[#D4AF37] uppercase mb-2 font-bold tracking-widest">Node ID</div>
-             <div className="text-sm break-all font-bold text-white">{peerId || '...'}</div>
+      {transcript && (
+        <div className="absolute top-1/2 left-0 w-full text-center px-8 -translate-y-48 pointer-events-none">
+           <div className="bg-black/80 backdrop-blur-sm border border-[#D4AF37]/20 p-3 text-[10px] leading-relaxed inline-block mx-auto max-w-full">
+              {transcript}
            </div>
-           <div className="border-2 border-white p-4 bg-black/90">
-             <input type="text" value={targetId} onChange={(e) => setTargetId(e.target.value)} placeholder="TARGET_NODE_ID" className="w-full bg-transparent border-b border-[#D4AF37] py-2 focus:outline-none text-sm" />
-           </div>
-           <button onClick={startCall} className="w-full bg-[#D4AF37] text-black py-5 font-black flex items-center justify-center gap-3 active:scale-95 transition-all">
-             <Radio size={24} /> INITIATE_UPLINK
-           </button>
-         </div>
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-6 z-10 p-4">
-             <div className={`w-32 h-32 rounded-full border-4 border-[#D4AF37] flex items-center justify-center transition-all duration-500 ${isProcessing ? 'scale-110 shadow-[0_0_50px_#D4AF37]' : ''}`}>
-                <Activity size={48} className={callState === 'ACTIVE' ? 'text-[#D4AF37] animate-pulse' : 'text-white'} />
-             </div>
-             <div className="w-full bg-white/5 border border-[#D4AF37]/30 p-4 min-h-[120px] flex flex-col">
-                <div className="text-[9px] text-[#D4AF37] mb-2 uppercase tracking-widest flex items-center gap-2">
-                  <MessageSquare size={10} /> Neural Link Stream
-                </div>
-                <div className="text-xs text-white/90 leading-relaxed italic overflow-y-auto">
-                  {transcript || "Synchronizing brainwaves..."}
-                </div>
-             </div>
-             <div className="grid grid-cols-2 gap-4 w-full max-w-xs mt-auto">
-                <button onClick={endCall} className="bg-red-600 text-white py-4 font-black text-xs uppercase flex items-center justify-center gap-2">
-                  <PhoneOff size={16} /> Terminate
-                </button>
-                {callState === 'INCOMING' && (
-                  <button onClick={answerCall} className="bg-[#D4AF37] text-black py-4 font-black text-xs uppercase flex items-center justify-center gap-2">
-                    <Zap size={16} /> Answer
-                  </button>
-                )}
-             </div>
-          </div>
-        )}
+        </div>
+      )}
+
+      <div className="pb-16 flex justify-center">
+        <button onClick={endCall} className="w-20 h-20 bg-[#FF3B30] text-white flex items-center justify-center rounded-full active:scale-95 transition-transform shadow-[0_0_30px_rgba(255,59,48,0.2)]">
+          <PhoneOff size={32} fill="currentColor" className="rotate-[135deg]" />
+        </button>
       </div>
-      <audio ref={remoteAudioRef} autoPlay />
+      <audio ref={remoteAudioRef} autoPlay playsInline />
     </div>
   );
 }
