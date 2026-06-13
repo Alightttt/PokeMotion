@@ -25,6 +25,7 @@ export default function App() {
   const remoteAudioRef = useRef(null);
   const audioCleanupRef = useRef(null);
   const ttsAudioRef = useRef(new Audio());
+  const recognitionRef = useRef(null);
   
   const audioContextRef = useRef(null);
   const isLordPoke = new URLSearchParams(window.location.search).get('station') === '001';
@@ -69,11 +70,44 @@ export default function App() {
       }
     });
 
+    // Initialize Speech Recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event) => {
+        const text = event.results[event.results.length - 1][0].transcript;
+        console.log("[STT] Result:", text);
+        if (isLordPoke && callState === 'ACTIVE' && !isProcessing) {
+          getLordPokeResponse(text);
+        }
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error("[STT] Error:", event.error);
+        if (event.error === 'no-speech' && callState === 'ACTIVE') {
+          // Restart if it stops due to no speech
+          try { recognitionRef.current.start(); } catch(e) {}
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        console.log("[STT] End");
+        if (callState === 'ACTIVE') {
+          try { recognitionRef.current.start(); } catch(e) {}
+        }
+      };
+    }
+
     return () => peer.destroy();
-  }, [isLordPoke]);
+  }, [isLordPoke, callState, isProcessing]);
 
   // LLM Logic
   const getLordPokeResponse = async (userText) => {
+    if (!userText || userText.trim().length === 0) return;
     setIsProcessing(true);
     setTranscript(`[USER]: ${userText}`);
     console.log(`[LLM] Requesting for: "${userText}"`);
@@ -125,52 +159,24 @@ export default function App() {
     }
   };
 
-  // Voice activity detection
-  const startListening = (stream) => {
-    if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    const analyzer = audioContextRef.current.createAnalyser();
-    const source = audioContextRef.current.createMediaStreamSource(stream);
-    source.connect(analyzer);
-    
-    let silenceStart = Date.now();
-    const buffer = new Uint8Array(analyzer.frequencyBinCount);
-    
-    const checkVolume = () => {
-        if (callRef.current && callRef.current.open) {
-            analyzer.getByteFrequencyData(buffer);
-            const volume = buffer.reduce((a, b) => a + b) / buffer.length;
-            if (volume > 10) {
-                silenceStart = Date.now();
-            } else if (Date.now() - silenceStart > 1500 && !isProcessing) {
-                silenceStart = Date.now(); 
-                if (isLordPoke) {
-                    console.log("[STT] Silence detected, triggering LLM.");
-                    getLordPokeResponse("Tell me something interesting.");
-                }
-            }
-            requestAnimationFrame(checkVolume);
-        }
-    };
-    checkVolume();
-  };
-
   const setupCall = (call) => {
     callRef.current = call;
     
-    // Explicitly handle peer state to ensure tones stop
     call.on('stream', (remoteStream) => {
       console.log("[PEER] Stream received, transitioning to ACTIVE.");
-      stopTone(); // Ensure tone stops when actual audio data arrives
+      stopTone(); 
       
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remoteStream;
         remoteAudioRef.current.play().catch(e => console.error("[AUDIO] Play failed:", e));
       }
       setCallState('ACTIVE');
+      
       if (isLordPoke) {
-          startListening(remoteStream);
+          // Start STT on the station side to listen to the user
+          if (recognitionRef.current) {
+            try { recognitionRef.current.start(); } catch(e) {}
+          }
           speakWithIndicMio("Uplink synchronized. State your purpose, human.");
       }
     });
@@ -221,6 +227,9 @@ export default function App() {
 
   const endCall = () => {
     stopTone();
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch(e) {}
+    }
     callRef.current?.close();
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     setCallState('ENDED');
