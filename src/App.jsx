@@ -60,23 +60,27 @@ export default function App() {
   };
 
   const updateAudioOutput = useCallback(async (useSpeaker) => {
-    if (!ttsAudioRef.current || !navigator.mediaDevices.enumerateDevices) return;
+    if (!ttsAudioRef.current) return;
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioOutputs = devices.filter(device => device.kind === 'audiooutput');
-      let targetDevice;
-      if (useSpeaker) {
-        targetDevice = audioOutputs.find(d => 
-          d.label.toLowerCase().includes('speaker') || d.label.toLowerCase().includes('loudspeaker')
-        );
-      } else {
-        targetDevice = audioOutputs.find(d => 
-          d.label.toLowerCase().includes('receiver') || d.label.toLowerCase().includes('earpiece') ||
-          d.label.toLowerCase().includes('phone') || d.label === ''
-        );
-      }
-      if (targetDevice && ttsAudioRef.current.setSinkId) {
-        await ttsAudioRef.current.setSinkId(targetDevice.deviceId);
+      // Note: setSinkId is not available on most mobile browsers.
+      // We rely on the AudioContext and media stream management for mobile routing.
+      if (ttsAudioRef.current.setSinkId && navigator.mediaDevices.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioOutputs = devices.filter(device => device.kind === 'audiooutput');
+        let targetDevice;
+        if (useSpeaker) {
+          targetDevice = audioOutputs.find(d => 
+            d.label.toLowerCase().includes('speaker') || d.label.toLowerCase().includes('loudspeaker')
+          );
+        } else {
+          targetDevice = audioOutputs.find(d => 
+            d.label.toLowerCase().includes('receiver') || d.label.toLowerCase().includes('earpiece') ||
+            d.label.toLowerCase().includes('phone') || d.label === ''
+          );
+        }
+        if (targetDevice) {
+          await ttsAudioRef.current.setSinkId(targetDevice.deviceId);
+        }
       }
     } catch (err) {
       console.warn("Audio routing failed", err);
@@ -116,6 +120,7 @@ export default function App() {
 
   const speak = async (text) => {
     try {
+      // Indic-Mio Payload: inputs is correct for inference API.
       const response = await fetch(INDIC_MIO_API, {
         headers: { 
           "Authorization": `Bearer ${HF_TOKEN}`, 
@@ -140,10 +145,11 @@ export default function App() {
       await ttsAudioRef.current.play();
     } catch (err) {
       console.error("Mio TTS failed:", err);
+      // Fallback with specific male voice selection
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'hi-IN';
       const voices = window.speechSynthesis.getVoices();
-      const maleVoice = voices.find(v => v.lang.includes('hi') && v.name.includes('Male')) || voices[0];
+      const maleVoice = voices.find(v => v.lang.includes('hi') && v.name.toLowerCase().includes('male')) || voices.find(v => v.lang.includes('hi')) || voices[0];
       utterance.voice = maleVoice;
       window.speechSynthesis.speak(utterance);
       setTranscript(`Lord Poke: ${text}`);
@@ -178,26 +184,32 @@ export default function App() {
       source.connect(analyzer);
       const bufferLength = analyzer.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
+      
       let isSpeaking = false;
       let silenceStart = Date.now();
-      const THRESHOLD = 35; 
-      const SILENCE_DURATION = 1500; 
+      const THRESHOLD = 35; // Sensitivity threshold
+      const SILENCE_DURATION = 1500; // Duration of silence before stopping recording
+      
       const mediaRecorder = new MediaRecorder(localStreamRef.current);
       mediaRecorderRef.current = mediaRecorder;
+      
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
+      
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         audioChunksRef.current = [];
         if (audioBlob.size > 2000) processAudioWithWhisper(audioBlob);
       };
+      
       const checkAudio = () => {
         if (callState !== 'ACTIVE') return;
         analyzer.getByteFrequencyData(dataArray);
         let volume = 0;
         for (let i = 0; i < bufferLength; i++) volume += dataArray[i];
         volume /= bufferLength;
+        
         if (volume > THRESHOLD) {
           if (!isSpeaking) {
             isSpeaking = true;
@@ -210,6 +222,7 @@ export default function App() {
             if (mediaRecorder.state === 'recording') mediaRecorder.stop();
           }
         }
+        
         if (callState === 'ACTIVE') requestAnimationFrame(checkAudio);
       };
       checkAudio();
@@ -224,8 +237,17 @@ export default function App() {
       setCallState('DIALING');
       setErrorMessage('');
       audioCleanupRef.current = audioEngine.playDialTone();
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      
+      // Requesting microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true, 
+          noiseSuppression: true, 
+          autoGainControl: true 
+        } 
+      });
       localStreamRef.current = stream;
+      
       setTimeout(() => {
         stopTone();
         setCallState('ACTIVE');
@@ -236,6 +258,7 @@ export default function App() {
         speak("Haan, Lord Poke bol raha hoon. Bolo.");
       }, 3000);
     } catch (err) {
+      console.error("Call start error:", err);
       setErrorMessage("Microphone required");
       setCallState('IDLE');
     }
@@ -251,7 +274,13 @@ export default function App() {
   const acceptCall = async () => {
     stopTone();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true, 
+          noiseSuppression: true, 
+          autoGainControl: true 
+        } 
+      });
       localStreamRef.current = stream;
       setCallState('ACTIVE');
       setCallTimer(0);
@@ -260,6 +289,7 @@ export default function App() {
       initSTT();
       speak("Haan, Lord Poke bol raha hoon. Bolo.");
     } catch (err) {
+      console.error("Accept call error:", err);
       setErrorMessage("Microphone required");
       setCallState('IDLE');
     }
@@ -290,9 +320,10 @@ export default function App() {
       <button 
         onClick={action}
         disabled={disabled}
-        className={`w-[72px] h-[72px] flex items-center justify-center rounded-full transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+        className={`w-[72px] h-[72px] flex items-center justify-center rounded-full transition-all duration-500 ease-[appleSpring]
           ${active ? 'bg-white text-black scale-105' : 'bg-white/[0.08] text-white hover:bg-white/[0.12]'}
           ${disabled ? 'opacity-20' : 'active:scale-90'}`}
+        style={{ transitionTimingFunction: TOKENS.curves.appleSpring }}
       >
         <Icon size={30} strokeWidth={1.2} fill={active ? 'currentColor' : 'none'} />
       </button>
@@ -304,12 +335,10 @@ export default function App() {
 
   return (
     <div className="h-[100svh] w-full bg-[#000000] text-white flex flex-col items-center select-none relative overflow-hidden font-sans">
-      {/* Apple Atmospheric Glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[160%] h-[120%] bg-gradient-to-b from-[#2997ff]/5 via-transparent to-[#2997ff]/5 blur-[150px] pointer-events-none" />
       
-      {/* IDLE SCREEN */}
       {callState === 'IDLE' && (
-        <div className="z-10 w-full h-full flex flex-col items-center justify-between py-24 px-8 max-w-md animate-in fade-in zoom-in-95 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]">
+        <div className="z-10 w-full h-full flex flex-col items-center justify-between py-24 px-8 max-w-md animate-in fade-in zoom-in-95 duration-700">
           <div className="flex flex-col items-center gap-10 mt-16">
             <div className="w-32 h-32 bg-white/[0.04] backdrop-blur-3xl rounded-[2.5rem] flex items-center justify-center text-5xl border border-white/[0.08]">
                🌴
@@ -330,9 +359,8 @@ export default function App() {
         </div>
       )}
 
-      {/* RINGING SCREEN (INCOMING) */}
       {callState === 'RINGING' && (
-        <div className="z-10 w-full h-full flex flex-col items-center justify-between py-32 px-10 animate-in fade-in slide-in-from-bottom-12 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]">
+        <div className="z-10 w-full h-full flex flex-col items-center justify-between py-32 px-10 animate-in fade-in slide-in-from-bottom-12 duration-700">
           <div className="text-center mt-12 space-y-4">
             <p className="text-[#34C759] text-[11px] font-bold tracking-[0.4em] uppercase">Incoming Call</p>
             <h2 className="text-[52px] font-semibold tracking-tight">Lord Poke</h2>
@@ -351,9 +379,8 @@ export default function App() {
         </div>
       )}
 
-      {/* ACTIVE / DIALING SCREEN */}
       {(callState === 'ACTIVE' || callState === 'DIALING') && (
-        <div className="z-10 w-full h-full flex flex-col items-center justify-between py-24 px-8 max-w-md animate-in fade-in duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)]">
+        <div className="z-10 w-full h-full flex flex-col items-center justify-between py-24 px-8 max-w-md animate-in fade-in duration-1000">
           <div className="text-center space-y-1">
             <h2 className="text-[34px] font-semibold tracking-tight">Lord Poke</h2>
             <p className="text-[20px] tabular-nums text-white/40 font-normal h-8 tracking-wide">
@@ -362,7 +389,6 @@ export default function App() {
           </div>
           
           <div className="flex-1 flex flex-col items-center justify-center w-full">
-            {/* Pulsing Avatar Area */}
             <div className={`w-36 h-36 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-5xl mb-16 relative ${callState === 'ACTIVE' ? 'after:absolute after:inset-0 after:rounded-full after:animate-ping after:bg-white/5 after:scale-150' : ''}`}>
                🌴
             </div>
