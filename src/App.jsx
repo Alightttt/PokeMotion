@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import Peer from 'peerjs';
 import { 
   Phone, PhoneOff, Mic, MicOff, Grid, UserPlus, Video, 
-  Users, Volume2, Plus, Info, MessageSquare, SignalHigh
+  Users, Volume2, Plus, Info, MessageSquare, SignalHigh, X
 } from "lucide-react";
 import { audioEngine } from './AudioEngine';
 
@@ -18,6 +18,7 @@ export default function App() {
   const [callTimer, setCallTimer] = useState(0);
   const [micMuted, setMicMuted] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   
   const peerRef = useRef(null);
   const callRef = useRef(null);
@@ -45,17 +46,46 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (isLordPoke) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        localStreamRef.current = stream;
+      }).catch(err => {
+        console.error("Mic access denied:", err);
+        setErrorMessage("Microphone access required for Station mode.");
+      });
+    }
+
     const peer = new Peer(isLordPoke ? 'LORD_POKE_STATION_001' : undefined);
     peerRef.current = peer;
-    peer.on('open', setPeerId);
+
+    peer.on('open', (id) => {
+      setPeerId(id);
+      setErrorMessage('');
+    });
     
+    peer.on('error', (err) => {
+      console.error("PeerJS Error:", err.type, err);
+      if (err.type === 'unavailable-id') {
+        setErrorMessage("Connection ID is already in use. Retrying...");
+      } else {
+        setErrorMessage(`Connection Error: ${err.type}`);
+      }
+    });
+
     peer.on('call', (incomingCall) => {
       if (isLordPoke) {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-          localStreamRef.current = stream;
-          incomingCall.answer(stream); 
-          setupCall(incomingCall);
+        incomingCall.on('stream', (remoteStream) => {
+           setupCall(incomingCall, remoteStream);
         });
+        
+        if (localStreamRef.current) {
+          incomingCall.answer(localStreamRef.current);
+        } else {
+          navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            localStreamRef.current = stream;
+            incomingCall.answer(stream);
+          });
+        }
       } else {
         setCallState('INCOMING');
         callRef.current = incomingCall;
@@ -143,21 +173,22 @@ export default function App() {
     }
   };
 
-  const setupCall = (call) => {
+  const setupCall = (call, stream) => {
     callRef.current = call;
-    call.on('stream', (stream) => {
-      stopTone();
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = stream;
-        remoteAudioRef.current.play();
-      }
-      setCallState('ACTIVE');
-      setCallTimer(0);
-      timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
-      initSTT();
-      if (isLordPoke) speak("Haan, Lord Poke bol raha hoon. Bolo.");
-    });
+    stopTone();
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = stream;
+      remoteAudioRef.current.play();
+    }
+    setCallState('ACTIVE');
+    setCallTimer(0);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setCallTimer(prev => prev + 1), 1000);
+    initSTT();
+    if (isLordPoke) speak("Haan, Lord Poke bol raha hoon. Bolo.");
+
     call.on('close', endCall);
+    call.on('error', endCall);
   };
 
   const startCall = async () => {
@@ -168,16 +199,36 @@ export default function App() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
       const call = peerRef.current.call('LORD_POKE_STATION_001', stream);
-      setupCall(call);
+      
+      call.on('stream', (remoteStream) => {
+        setupCall(call, remoteStream);
+      });
+      call.on('error', endCall);
     } catch (err) {
+      console.error("Start call error:", err);
       endCall();
     }
+  };
+
+  const answerCall = async () => {
+     try {
+       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+       localStreamRef.current = stream;
+       callRef.current.on('stream', (remoteStream) => {
+         setupCall(callRef.current, remoteStream);
+       });
+       callRef.current.answer(stream);
+     } catch(err) {
+       endCall();
+     }
   };
 
   const endCall = () => {
     stopTone();
     callRef.current?.close();
-    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+    }
     recognitionRef.current?.stop();
     clearInterval(timerRef.current);
     processingRef.current = false;
@@ -194,73 +245,109 @@ export default function App() {
     }
   };
 
+  const IconButton = ({ icon: Icon, label, action, active, disabled, variant = 'glass' }) => (
+    <div className="flex flex-col items-center gap-2">
+      <button 
+        onClick={action}
+        disabled={disabled}
+        className={`w-[4.5rem] h-[4.5rem] flex items-center justify-center rounded-full transition-all duration-300
+          ${variant === 'glass' ? (active ? 'bg-white text-black' : 'bg-white/10 backdrop-blur-xl text-white hover:bg-white/20 border border-white/5') : ''}
+          ${variant === 'green' ? 'bg-[#34C759] text-white' : ''}
+          ${variant === 'red' ? 'bg-[#FF3B30] text-white' : ''}
+          ${disabled ? 'opacity-30' : 'active:scale-90'}`}
+      >
+        <Icon size={28} fill={variant !== 'glass' ? "currentColor" : (active ? "black" : "none")} />
+      </button>
+      <span className={`text-[11px] font-medium text-white/90 transition-opacity ${disabled ? 'opacity-30' : 'opacity-100'}`}>
+        {label}
+      </span>
+    </div>
+  );
+
   if (callState === 'IDLE') {
     return (
-      <div className="h-[100svh] bg-black text-[#D4AF37] font-mono flex flex-col p-8 select-none">
-        <div className="flex-1 flex flex-col items-center justify-center gap-6">
-          <div className="w-32 h-32 bg-[#1a1a1a] flex items-center justify-center text-6xl border border-[#D4AF37]/20">🌴</div>
+      <div className="h-[100svh] bg-black text-white flex flex-col items-center justify-between py-24 px-8 select-none font-sans">
+        <div className="flex flex-col items-center gap-6 animate-in fade-in duration-700">
+          <div className="w-24 h-24 bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl flex items-center justify-center text-4xl shadow-2xl border border-white/10 overflow-hidden relative">
+             <div className="absolute inset-0 bg-white/5 backdrop-blur-sm" />
+             <span className="relative z-10">🌴</span>
+          </div>
           <div className="text-center">
-            <h1 className="text-3xl font-bold tracking-tighter mb-1">Lord Poke</h1>
-            <p className="text-[10px] uppercase tracking-[0.2em] opacity-60">Status: Online</p>
+            <h1 className="text-3xl font-semibold tracking-tight">Lord Poke</h1>
+            <p className="text-sm text-white/40 mt-1">PokeMotion Station 001</p>
           </div>
         </div>
-        <div className="pb-12 flex justify-center">
-          <button onClick={startCall} className="w-20 h-20 bg-[#D4AF37] text-black flex items-center justify-center rounded-full hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(212,175,55,0.3)]">
-            <Phone size={32} fill="currentColor" />
+
+        {errorMessage && (
+           <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-2xl text-red-400 text-xs animate-bounce">
+             {errorMessage}
+           </div>
+        )}
+
+        <div className="w-full max-w-xs flex justify-center pb-8">
+          <button 
+            onClick={startCall} 
+            className="w-20 h-20 bg-[#34C759] text-white flex items-center justify-center rounded-full shadow-[0_0_40px_rgba(52,199,89,0.3)] active:scale-95 transition-transform"
+          >
+            <Phone size={36} fill="currentColor" />
           </button>
         </div>
       </div>
     );
   }
 
+  if (callState === 'INCOMING') {
+    return (
+      <div className="h-[100svh] bg-[#0a0a0a] text-white flex flex-col items-center justify-between py-24 px-12 select-none font-sans">
+        <div className="text-center">
+          <p className="text-white/60 text-xs uppercase tracking-[0.2em] mb-3">Incoming Call</p>
+          <h2 className="text-4xl font-semibold tracking-tight">Lord Poke</h2>
+        </div>
+
+        <div className="w-full flex justify-between items-center max-w-[280px]">
+          <IconButton icon={PhoneOff} label="Decline" action={endCall} variant="red" />
+          <IconButton icon={Phone} label="Accept" action={answerCall} variant="green" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-[100svh] bg-black text-[#D4AF37] font-mono flex flex-col select-none relative overflow-hidden">
-      <div className="pt-20 text-center flex-none">
-        <h2 className="text-4xl font-bold tracking-tighter mb-2">Lord Poke</h2>
-        <p className="text-xl tabular-nums opacity-80 h-8">
-          {callState === 'ACTIVE' ? formatTime(callTimer) : 'calling...'}
+    <div className="h-[100svh] bg-black text-white flex flex-col select-none relative overflow-hidden font-sans">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[50%] bg-gradient-to-b from-blue-500/10 to-transparent blur-[120px] pointer-events-none" />
+
+      <div className="pt-24 text-center z-10">
+        <h2 className="text-3xl font-semibold tracking-tight mb-1">Lord Poke</h2>
+        <p className="text-lg tabular-nums text-white/60 font-light h-8">
+          {callState === 'ACTIVE' ? formatTime(callTimer) : (callState === 'DIALING' ? 'calling...' : '')}
         </p>
       </div>
 
-      <div className="flex-1 px-12 flex items-center">
-        <div className="w-full grid grid-cols-3 gap-y-10 gap-x-4">
-          {[
-            { icon: micMuted ? MicOff : Mic, label: 'mute', action: toggleMute, active: micMuted },
-            { icon: Grid, label: 'keypad', action: () => {}, disabled: true },
-            { icon: Volume2, label: 'audio', action: () => setSpeakerOn(!speakerOn), active: speakerOn },
-            { icon: Plus, label: 'add call', disabled: true },
-            { icon: Video, label: 'FaceTime', disabled: true },
-            { icon: Users, label: 'contacts', disabled: true },
-          ].map((btn, i) => (
-            <div key={i} className="flex flex-col items-center gap-2">
-              <button 
-                onClick={btn.action}
-                disabled={btn.disabled}
-                className={`w-16 h-16 flex items-center justify-center rounded-full transition-all border
-                  ${btn.active ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-white/5 border-white/10 text-[#D4AF37]'}
-                  ${btn.disabled ? 'opacity-20 grayscale' : 'active:bg-white/20'}`}
-              >
-                <btn.icon size={28} />
-              </button>
-              <span className={`text-[10px] uppercase tracking-widest ${btn.disabled ? 'opacity-20' : 'opacity-60'}`}>
-                {btn.label}
-              </span>
-            </div>
-          ))}
+      <div className="flex-1 flex items-center justify-center z-10 px-8">
+        <div className="w-full grid grid-cols-3 gap-y-12 max-w-[300px]">
+          <IconButton icon={micMuted ? MicOff : Mic} label="mute" action={toggleMute} active={micMuted} />
+          <IconButton icon={Grid} label="keypad" disabled />
+          <IconButton icon={Volume2} label="speaker" action={() => setSpeakerOn(!speakerOn)} active={speakerOn} />
+          <IconButton icon={Plus} label="add call" disabled />
+          <IconButton icon={Video} label="FaceTime" disabled />
+          <IconButton icon={Users} label="contacts" disabled />
         </div>
       </div>
 
       {transcript && (
-        <div className="absolute top-1/2 left-0 w-full text-center px-8 -translate-y-48 pointer-events-none">
-           <div className="bg-black/80 backdrop-blur-sm border border-[#D4AF37]/20 p-3 text-[10px] leading-relaxed inline-block mx-auto max-w-full">
+        <div className="absolute top-[45%] left-0 w-full text-center px-10 pointer-events-none z-20 transition-all duration-500 animate-in fade-in slide-in-from-bottom-4">
+           <div className="bg-white/10 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 text-[13px] font-medium leading-tight text-white/90 shadow-2xl">
               {transcript}
            </div>
         </div>
       )}
 
-      <div className="pb-16 flex justify-center">
-        <button onClick={endCall} className="w-20 h-20 bg-[#FF3B30] text-white flex items-center justify-center rounded-full active:scale-95 transition-transform shadow-[0_0_30px_rgba(255,59,48,0.2)]">
-          <PhoneOff size={32} fill="currentColor" className="rotate-[135deg]" />
+      <div className="pb-20 flex justify-center z-10">
+        <button 
+          onClick={endCall} 
+          className="w-20 h-20 bg-[#FF3B30] text-white flex items-center justify-center rounded-full active:scale-90 transition-transform shadow-[0_0_40px_rgba(255,59,48,0.3)]"
+        >
+          <PhoneOff size={36} fill="currentColor" className="rotate-[135deg]" />
         </button>
       </div>
       <audio ref={remoteAudioRef} autoPlay playsInline />
