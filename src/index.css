@@ -3,44 +3,71 @@
 @tailwind utilities;
 
 :root {
-  background-color: #000000;
-  color: #ffffff;
+  --apple-bg: #000000;
+  --apple-text: #F5F5F7;
+  --apple-glass: rgba(255, 255, 255, 0.08);
+  --apple-border: rgba(255, 255, 255, 0.12);
+  --apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --apple-blue: #0066cc;
+  --apple-surface: #272729;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   margin: 0;
   padding: 0;
-  /* Use system font stack for authentic Apple feel */
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
-  overflow: hidden;
-  background: #000;
+  background: var(--apple-bg);
+  color: var(--apple-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  letter-spacing: -0.01em;
+  height: 100svh;
+  width: 100vw;
 }
 
-/* Remove brutalist constraints to allow premium rounded corners and glass effects */
-* {
-  border-radius: initial;
-  box-shadow: initial;
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+.glass {
+  background: var(--apple-glass);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid var(--apple-border);
+}
+
+.spring-transition {
+  transition: all 0.6s var(--apple-spring);
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* Custom utility for the intense Apple glass effect */
-.glass-morphism {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+@keyframes apple-fade-in {
+  from { opacity: 0; transform: scale(0.92) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* Smooth scaling for Apple interactions */
-.active-scale {
-  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+.animate-apple-in {
+  animation: apple-fade-in 0.8s var(--apple-spring) forwards;
 }
 
-.active-scale:active {
-  transform: scale(0.92);
+/* Custom Scrollbar for transcript if needed */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
