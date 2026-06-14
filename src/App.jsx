@@ -6,7 +6,6 @@ import {
 import { DailyVoiceClient } from "@daily-co/realtime-ai-daily";
 import { VoiceClient } from "realtime-ai";
 import { motion, AnimatePresence } from "framer-motion";
-import gsap from "gsap";
 
 export default function App() {
   const [callState, setCallState] = useState('IDLE'); 
@@ -15,12 +14,9 @@ export default function App() {
   const [micMuted, setMicMuted] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(true);
   const [isBotSpeaking, setIsBotSpeaking] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
   
   const clientRef = useRef(null);
   const timerRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const analyzerRef = useRef(null);
 
   useEffect(() => {
     // Lock viewport to 100svh to prevent Android address bar jitter
@@ -104,7 +100,7 @@ export default function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const IconButton = ({ icon: Icon, label, action, active, disabled, color = "white" }) => (
+  const IconButton = ({ icon: Icon, label, action, active, disabled }) => (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -250,7 +246,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <style jsx>{`
+      <style jsx="true">{`
         .glass {
           background: rgba(255, 255, 255, 0.08);
           backdrop-filter: blur(50px) saturate(210%);
