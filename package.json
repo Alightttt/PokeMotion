@@ -17,8 +17,8 @@
     "uuid": "^10.0.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.3.0",
-    "@daily-co/realtime-ai-daily": "latest",
-    "realtime-ai": "latest"
+    "realtime-ai": "latest",
+    "@daily-co/realtime-ai-daily": "latest"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
