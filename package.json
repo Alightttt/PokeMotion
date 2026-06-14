@@ -18,7 +18,7 @@
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.3.0",
     "@daily-co/realtime-ai-daily": "latest",
-    "@pipecat-ai/client-sdk-javascript": "latest"
+    "realtime-ai": "latest"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
