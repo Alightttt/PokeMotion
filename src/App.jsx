@@ -245,7 +245,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <style jsx>{`
+      <style>{`
         .glass {
           background: rgba(255, 255, 255, 0.08);
           backdrop-filter: blur(50px) saturate(210%);
