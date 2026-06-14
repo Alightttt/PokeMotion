@@ -4,7 +4,7 @@ import {
   Users, Volume2, Plus, Info
 } from "lucide-react";
 import { DailyVoiceClient } from "@daily-co/realtime-ai-daily";
-import { RTVIClient } from "@pipecat-ai/client-sdk-javascript";
+import { VoiceClient } from "realtime-ai";
 import { motion, AnimatePresence } from "framer-motion";
 import gsap from "gsap";
 
