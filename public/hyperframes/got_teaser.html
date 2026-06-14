@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GOT x Hyperframes | Teaser</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --accent-color: #ffffff;
+            --text-color: rgba(255, 255, 255, 0.9);
+            --nolan-font: "Times New Roman", Times, serif;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--nolan-font);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #cinematic-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #1a1a1a 0%, #050505 100%);
+        }
+
+        .teaser-text {
+            font-size: 4rem;
+            font-weight: 200;
+            text-transform: uppercase;
+            letter-spacing: 1.5rem;
+            opacity: 0;
+            position: absolute;
+            text-align: center;
+            filter: blur(10px);
+        }
+
+        .sub-text {
+            font-size: 1rem;
+            letter-spacing: 0.5rem;
+            margin-top: 2rem;
+            opacity: 0;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Particle/Ember Effect */
+        #particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            background: rgba(255, 100, 0, 0.4);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* Scanline Overlay for Nolan Texture */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0,0,0,0.15) 0px,
+                rgba(0,0,0,0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #ticking-clock {
+            position: absolute;
+            bottom: 5%;
+            font-size: 0.8rem;
+            letter-spacing: 0.3rem;
+            opacity: 0.3;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay"></div>
+    <div id="particles"></div>
+
+    <div id="cinematic-container">
+        <div class="teaser-text" id="t1">Winter Is Coming</div>
+        <div class="teaser-text" id="t2">Time Is Running Out</div>
+        <div class="teaser-text" id="t3">Hyperframes</div>
+        <div class="sub-text" id="s1">AN ALIGHT PRODUCTION</div>
+        <div id="ticking-clock">00:00:00:00</div>
+    </div>
+
+    <script>
+        // Particle System
+        const container = document.getElementById('particles');
+        for (let i = 0; i < 50; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = Math.random() * 3 + 1;
+            p.style.width = `${size}px`;
+            p.style.height = `${size}px`;
+            p.style.left = `${Math.random() * 100}%`;
+            p.style.top = `${Math.random() * 100}%`;
+            container.appendChild(p);
+            
+            gsap.to(p, {
+                y: -100 - Math.random() * 200,
+                x: (Math.random() - 0.5) * 50,
+                opacity: 0,
+                duration: 2 + Math.random() * 3,
+                repeat: -1,
+                ease: "power1.out",
+                delay: Math.random() * 5
+            });
+        }
+
+        // Ticking Clock Logic
+        const clock = document.getElementById('ticking-clock');
+        let frame = 0;
+        function updateClock() {
+            frame++;
+            const f = (frame % 60).toString().padStart(2, '0');
+            const s = Math.floor((frame / 60) % 60).toString().padStart(2, '0');
+            const m = Math.floor((frame / 3600) % 60).toString().padStart(2, '0');
+            clock.innerText = `00:${m}:${s}:${f}`;
+            requestAnimationFrame(updateClock);
+        }
+        updateClock();
+
+        // Cinematic Timeline
+        const tl = gsap.timeline({ repeat: -1 });
+
+        tl.to("#t1", { opacity: 1, filter: "blur(0px)", scale: 1.1, duration: 2, ease: "power2.inOut" })
+          .to("#t1", { opacity: 0, filter: "blur(10px)", scale: 1.2, duration: 1.5, ease: "power2.inOut" }, "+=1")
+          
+          .to("#t2", { opacity: 1, filter: "blur(0px)", scale: 1.1, duration: 2, ease: "power2.inOut" })
+          .to("#t2", { opacity: 0, filter: "blur(10px)", scale: 1.2, duration: 1.5, ease: "power2.inOut" }, "+=1")
+
+          .to("#t3", { opacity: 1, filter: "blur(0px)", scale: 1.3, duration: 3, ease: "expo.out" })
+          .to("#s1", { opacity: 1, duration: 2 }, "-=1")
+          .to(["#t3", "#s1"], { opacity: 0, duration: 2, ease: "power2.inOut" }, "+=2");
+
+        // Subtle temporal pulsing (Nolan style)
+        gsap.to("#cinematic-container", {
+            scale: 1.02,
+            duration: 0.1,
+            repeat: -1,
+            yoyo: true,
+            ease: "none",
+            opacity: 0.98
+        });
+    </script>
+</body>
+</html>
