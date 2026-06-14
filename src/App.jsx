@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { 
   Phone, PhoneOff, Mic, MicOff, Grid, Video, 
-  Users, Volume2, Plus, Info
+  Users, Volume2, Plus
 } from "lucide-react";
 import { DailyVoiceClient } from "@daily-co/realtime-ai-daily";
-import { VoiceClient } from "realtime-ai";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function App() {
@@ -245,18 +244,6 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <style jsx="true">{`
-        .glass {
-          background: rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(50px) saturate(210%);
-          -webkit-backdrop-filter: blur(50px) saturate(210%);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-        }
-        .bg-radial-gradient {
-          background: radial-gradient(circle at center, var(--tw-gradient-from), var(--tw-gradient-to));
-        }
-      `}</style>
     </div>
   );
 }
