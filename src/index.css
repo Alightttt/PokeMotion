@@ -9,15 +9,15 @@
   --apple-border: rgba(255, 255, 255, 0.12);
   --apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --apple-blue: #0066cc;
-  --apple-surface: #272729;
 }
 
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
-body {
+html, body {
   margin: 0;
   padding: 0;
   background: var(--apple-bg);
@@ -26,48 +26,38 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
-  letter-spacing: -0.01em;
+  height: 100svh;
+  width: 100vw;
+  position: fixed; /* Lock viewport */
+}
+
+#root {
   height: 100svh;
   width: 100vw;
 }
 
-#root {
-  height: 100%;
-  width: 100%;
-}
-
 .glass {
   background: var(--apple-glass);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(50px) saturate(210%);
+  -webkit-backdrop-filter: blur(50px) saturate(210%);
   border: 1px solid var(--apple-border);
 }
 
-.spring-transition {
-  transition: all 0.6s var(--apple-spring);
+.bg-radial-gradient {
+  background-image: radial-gradient(circle at center, var(--tw-gradient-from), var(--tw-gradient-to));
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-@keyframes apple-fade-in {
-  from { opacity: 0; transform: scale(0.92) translateY(10px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+/* Fluid Apple Animations */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0; }
+  50% { opacity: 0.2; }
+  100% { transform: scale(1.4); opacity: 0; }
 }
 
-.animate-apple-in {
-  animation: apple-fade-in 0.8s var(--apple-spring) forwards;
-}
-
-/* Custom Scrollbar for transcript if needed */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+.animate-pulse-ring {
+  animation: pulse-ring 2.5s var(--apple-spring) infinite;
 }
