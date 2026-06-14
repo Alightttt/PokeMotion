@@ -244,6 +244,18 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <style jsx>{`
+        .glass {
+          background: rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(50px) saturate(210%);
+          -webkit-backdrop-filter: blur(50px) saturate(210%);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+        }
+        .bg-radial-gradient {
+          background: radial-gradient(circle at center, var(--tw-gradient-from), var(--tw-gradient-to));
+        }
+      `}</style>
     </div>
   );
 }
