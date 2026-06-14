@@ -3,7 +3,7 @@ import {
   Phone, PhoneOff, Mic, MicOff, Grid, Video, 
   Users, Volume2, Plus
 } from "lucide-react";
-import { DailyVoiceClient } from "realtime-ai";
+import { VoiceClient } from "realtime-ai";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function App() {
@@ -31,7 +31,8 @@ export default function App() {
       const response = await fetch('/api/bot', { method: 'POST' });
       const { room_url } = await response.json();
 
-      const client = new DailyVoiceClient({
+      // Based on RTVI / Pipecat SDK docs, the core client is VoiceClient
+      const client = new VoiceClient({
         baseUrl: room_url,
         services: {
           llm: "huggingface",
