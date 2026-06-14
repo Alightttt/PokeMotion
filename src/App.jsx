@@ -3,7 +3,7 @@ import {
   Phone, PhoneOff, Mic, MicOff, Grid, Video, 
   Users, Volume2, Plus
 } from "lucide-react";
-import { DailyVoiceClient } from "@daily-co/realtime-ai-daily";
+import { VoiceClient } from "@daily-co/realtime-ai-daily";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function App() {
@@ -31,7 +31,7 @@ export default function App() {
       const response = await fetch('/api/bot', { method: 'POST' });
       const { room_url } = await response.json();
 
-      const client = new DailyVoiceClient({
+      const client = new VoiceClient({
         baseUrl: room_url,
         services: {
           llm: "huggingface",
