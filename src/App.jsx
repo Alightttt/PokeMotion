@@ -3,7 +3,8 @@ import {
   Phone, PhoneOff, Mic, MicOff, Grid, Video, 
   Users, Volume2, Plus
 } from "lucide-react";
-import { VoiceClient } from "realtime-ai";
+import { RTVIClient } from "realtime-ai";
+import { DailyTransport } from "@daily-co/realtime-ai-daily";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function App() {
@@ -29,19 +30,19 @@ export default function App() {
   const initVoiceClient = useCallback(async () => {
     try {
       const response = await fetch('/api/bot', { method: 'POST' });
-      const { room_url } = await response.json();
+      const { room_url, token } = await response.json();
 
-      // Based on RTVI / Pipecat SDK docs, the core client is VoiceClient
-      const client = new VoiceClient({
-        baseUrl: room_url,
-        services: {
-          llm: "huggingface",
-          tts: "indic-mio",
-          stt: "whisper"
-        },
-        config: [
-          { service: "tts", options: [{ name: "voice", value: "male" }] }
-        ]
+      // RTVI SDK uses RTVIClient and a Transport
+      const transport = new DailyTransport();
+      const client = new RTVIClient({
+        transport,
+        params: {
+          baseUrl: room_url,
+          token: token,
+          config: [
+            { service: "tts", options: [{ name: "voice", value: "male" }] }
+          ]
+        }
       });
 
       client.on("botConnected", () => {
@@ -62,7 +63,7 @@ export default function App() {
       client.on("botStoppedSpeaking", () => setIsBotSpeaking(false));
 
       clientRef.current = client;
-      await client.start();
+      await client.connect();
     } catch (err) {
       console.error("Failed to init voice client", err);
       setCallState('IDLE');
@@ -76,7 +77,7 @@ export default function App() {
 
   const endCall = async () => {
     if (clientRef.current) {
-      await clientRef.current.stop();
+      await clientRef.current.disconnect();
       clientRef.current = null;
     }
     clearInterval(timerRef.current);
@@ -89,7 +90,7 @@ export default function App() {
   const toggleMute = () => {
     if (clientRef.current) {
       const isMuted = !micMuted;
-      clientRef.current.setMicMuted(isMuted);
+      clientRef.current.enableMic(!isMuted);
       setMicMuted(isMuted);
     }
   };
