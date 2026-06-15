@@ -21,7 +21,9 @@
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.3.0",
     "peerjs": "^1.5.4",
-    "@twa-dev/sdk": "^7.0.0"
+    "@twa-dev/sdk": "^7.0.0",
+    "realtime-ai": "latest",
+    "@daily-co/realtime-ai-daily": "latest"
   },
   "devDependencies": {
     "vite": "^5.3.1",
