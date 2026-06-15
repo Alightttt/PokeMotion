@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --apple-bg: #000000;
+  --apple-text: #F5F5F7;
+  --apple-glass: rgba(255, 255, 255, 0.08);
+  --apple-border: rgba(255, 255, 255, 0.12);
+  --apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --apple-blue: #0066cc;
+  --apple-surface: #272729;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--apple-bg);
+  color: var(--apple-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100vw;
+  /* position: fixed removed to prevent scroll clipping */
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+.glass {
+  background: var(--apple-glass);
+  backdrop-filter: blur(40px) saturate(210%);
+  -webkit-backdrop-filter: blur(40px) saturate(210%);
+  border: 1px solid var(--apple-border);
+}
+
+.spring-transition {
+  transition: all 0.5s var(--apple-spring);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes apple-fade-in {
+  from { 
+    opacity: 0; 
+    transform: scale(0.95) translateY(20px); 
+    filter: blur(10px);
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+    filter: blur(0px);
+  }
+}
+
+.animate-apple-in {
+  animation: apple-fade-in 0.7s var(--apple-spring) forwards;
+}
+
+/* Premium Gradient for the "Accept" Button */
+.bg-success-gradient {
+  background: linear-gradient(180deg, #34C759 0%, #28a745 100%);
+}
+
+/* Premium Gradient for the "End" Button */
+.bg-danger-gradient {
+  background: linear-gradient(180deg, #FF3B30 0%, #d7261b 100%);
+}
+
+/* Custom Scrollbar for transcript */
+::-webkit-scrollbar {
+  width: 0px;
+}
