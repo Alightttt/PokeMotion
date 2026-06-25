@@ -24,7 +24,8 @@ export default async function handler(req, res) {
       properties: {
         exp: Math.round(Date.now() / 1000) + 3600,
         enable_chat: true,
-        enable_recording: "cloud",
+        // Cloud recording is not available on free plans and was causing 400 errors.
+        // Removing it to ensure room creation works for all plan types.
         start_audio_off: false,
       }
     }, {
@@ -46,17 +47,20 @@ export default async function handler(req, res) {
 
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
+    const errorInfo = error.response?.data?.info || '';
     const errorStatus = error.response?.status || 500;
     
     console.error('Daily API Error:', {
       status: errorStatus,
       error: errorMessage,
+      info: errorInfo,
       fullError: error.response?.data || error.message
     });
     
     return res.status(errorStatus === 401 || errorStatus === 403 ? 401 : 500).json({ 
       error: 'Failed to initialize call session',
       details: errorMessage,
+      info: errorInfo,
       debugInfo: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
