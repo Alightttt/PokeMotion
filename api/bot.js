@@ -10,10 +10,16 @@ export default async function handler(req, res) {
   const DAILY_API_KEY = process.env.DAILY_API_KEY;
   
   if (!DAILY_API_KEY) {
-    return res.status(500).json({ error: 'Missing DAILY_API_KEY on server' });
+    console.error('DAILY_API_KEY not found in environment variables');
+    return res.status(500).json({ 
+      error: 'Missing DAILY_API_KEY on server',
+      message: 'Environment variable DAILY_API_KEY is not configured. Please set it in Vercel project settings.'
+    });
   }
 
   try {
+    console.log('Creating Daily.co room with API key:', DAILY_API_KEY.substring(0, 10) + '...');
+    
     const roomResponse = await axios.post('https://api.daily.co/v1/rooms', {
       properties: {
         exp: Math.round(Date.now() / 1000) + 3600,
@@ -25,10 +31,12 @@ export default async function handler(req, res) {
       headers: { 
         Authorization: `Bearer ${DAILY_API_KEY}`,
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 10000
     });
 
     const room = roomResponse.data;
+    console.log('Room created successfully:', room.name);
 
     return res.status(200).json({
       room_url: room.url,
@@ -37,10 +45,19 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Daily API Error:', error.response?.data || error.message);
-    return res.status(500).json({ 
+    const errorMessage = error.response?.data?.error || error.message;
+    const errorStatus = error.response?.status || 500;
+    
+    console.error('Daily API Error:', {
+      status: errorStatus,
+      error: errorMessage,
+      fullError: error.response?.data || error.message
+    });
+    
+    return res.status(errorStatus === 401 || errorStatus === 403 ? 401 : 500).json({ 
       error: 'Failed to initialize call session',
-      details: error.response?.data?.error || error.message 
+      details: errorMessage,
+      debugInfo: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 }
