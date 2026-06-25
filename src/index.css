@@ -9,6 +9,7 @@
   --apple-border: rgba(255, 255, 255, 0.12);
   --apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --apple-blue: #0066cc;
+  --apple-surface: #272729;
 }
 
 * {
@@ -25,39 +26,58 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
-  height: 100svh;
+  overflow-x: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
   width: 100vw;
-  position: fixed; /* Lock viewport */
 }
 
 #root {
-  height: 100svh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .glass {
   background: var(--apple-glass);
-  backdrop-filter: blur(50px) saturate(210%);
-  -webkit-backdrop-filter: blur(50px) saturate(210%);
+  backdrop-filter: blur(40px) saturate(210%);
+  -webkit-backdrop-filter: blur(40px) saturate(210%);
   border: 1px solid var(--apple-border);
 }
 
-.bg-radial-gradient {
-  background-image: radial-gradient(circle at center, var(--tw-gradient-from), var(--tw-gradient-to));
+.spring-transition {
+  transition: all 0.5s var(--apple-spring);
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* Fluid Apple Animations */
-@keyframes pulse-ring {
-  0% { transform: scale(0.95); opacity: 0; }
-  50% { opacity: 0.2; }
-  100% { transform: scale(1.4); opacity: 0; }
+@keyframes apple-fade-in {
+  from { 
+    opacity: 0; 
+    transform: scale(0.95) translateY(20px); 
+    filter: blur(10px);
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+    filter: blur(0px);
+  }
 }
 
-.animate-pulse-ring {
-  animation: pulse-ring 2.5s var(--apple-spring) infinite;
+.animate-apple-in {
+  animation: apple-fade-in 0.7s var(--apple-spring) forwards;
+}
+
+.bg-success-gradient {
+  background: linear-gradient(180deg, #34C759 0%, #28a745 100%);
+}
+
+.bg-danger-gradient {
+  background: linear-gradient(180deg, #FF3B30 0%, #d7261b 100%);
+}
+
+::-webkit-scrollbar {
+  width: 0px;
 }
